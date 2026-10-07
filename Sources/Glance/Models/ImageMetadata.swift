@@ -2,13 +2,13 @@ import Foundation
 import CoreGraphics
 import OSLog
 
-public enum ImageStatus: String, Codable {
+public enum ImageStatus: String, Codable, Sendable {
     case discard
     case undecided
     case keep
 }
 
-public struct ImageMetadata: Codable, Equatable {
+public struct ImageMetadata: Codable, Equatable, Sendable {
     public var status: ImageStatus
     public var cropRect: CGRect? // Normalized crop rectangle (values in 0.0...1.0)
     
@@ -26,7 +26,7 @@ public class MetadataManager: ObservableObject {
     
     private let queue = DispatchQueue(label: "com.glance.metadata.save", qos: .background)
     
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "", category: "Metadata")
+    nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "", category: "Metadata")
 
     private let customSaveURL: URL?
 

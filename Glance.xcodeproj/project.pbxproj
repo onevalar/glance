@@ -9,27 +9,31 @@
 /* Begin PBXBuildFile section */
 		068E80709F218D865B25BB90 /* GlanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A25F305947468944E48272 /* GlanceTests.swift */; };
 		1B108BC02E10D989AFEEDA39 /* ImageInfoPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC9A3A3A4853E3C2721F613 /* ImageInfoPanel.swift */; };
-		1B589C60454C1C6B07BB50A0 /* SwiftUITooltip in Frameworks */ = {isa = PBXBuildFile; productRef = 975AE6F44D6004E66747AC29 /* SwiftUITooltip */; };
 		2D31B5CBA4EA88AE060A6E52 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA249A0296B5CB046DE115B1 /* SettingsWindow.swift */; };
 		348B3E8B71B05E4A9E510590 /* ThumbnailSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C89555C34FAD0446F073046 /* ThumbnailSidebar.swift */; };
 		36025394FB362A306973A121 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 701B600AF6E272C5553ADC4F /* AppState.swift */; };
 		3B06F20FFCFF0882893EAEAC /* ToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52335F6F978B8B64780E111 /* ToolbarView.swift */; };
 		42C10AC32FCBF42D1B631C29 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5CBB1DC136F4AD73C629F084 /* Localizable.xcstrings */; };
+		4647F582C17C1D678C923513 /* ImageRotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */; };
 		4D132A76C356841D92A3278D /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6136D7398BDC5BA16D4B9257 /* AppLogger.swift */; };
-		508804CD84F27A12CF0C0AA0 /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 8FB306D1F66CAE9EA53EDC03 /* SDWebImageSwiftUI */; };
 		51C5607A78ABAFDD018A2916 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136F0AEA271E04C30969FE74 /* ContentView.swift */; };
 		547C0071596C2C0A2C56C639 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F5D573B1ABE72ED5A9AAF260 /* Assets.xcassets */; };
 		5FD5D2CB31026E6F804D2EA1 /* NavigationIdentifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F17A562555BFE62BB6B17FA /* NavigationIdentifier.swift */; };
 		605C2D8D599668AB26E228C5 /* GlanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3B5673204724AF162823D7 /* GlanceApp.swift */; };
+		71F205D6CF781C5BA848F6B4 /* ImageMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */; };
+		76EFB7B0A4F1EE313FFF421C /* CropOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28E920EECDC0AE91E31BFD0 /* CropOverlayView.swift */; };
 		87954A2A5789F29831B647E2 /* GeneralSettingsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41EBB1ADB88AE3BB9DB9A521 /* GeneralSettingsPane.swift */; };
+		961E5D2EC3AC65D098F2580F /* MetadataManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDE57FF45E9EEB70485B4C87 /* MetadataManagerTests.swift */; };
 		96D7F60F6F82736FD7C744EB /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C195C2BD5E6A0DE32CA4756 /* Util.swift */; };
+		997966AA149DB454402DB929 /* ImageCompareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C616E525B5B79990FEB1588 /* ImageCompareView.swift */; };
 		B32703677065B00F62794CDD /* ImageThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A8204091DECCBD91A158543 /* ImageThumbnailView.swift */; };
 		B3802B1EBCD3F3E2B5FFD483 /* AboutSettingsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 380380B7A65C551DF9E1F604 /* AboutSettingsPane.swift */; };
-		B7D0536BB572326DAE8768C3 /* LaunchAtLogin in Frameworks */ = {isa = PBXBuildFile; productRef = 2EBE2959AAADF9D468607032 /* LaunchAtLogin */; };
 		C4C79171C69C4E2EC9AE6772 /* ImagePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B458974AAEA6CC71550618 /* ImagePreviewView.swift */; };
 		C56988171FDAC1E7FA8AF407 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 811A1AAA72117DFB81F850BC /* PermissionsManager.swift */; };
+		D2DC441F53CD4938DBC26191 /* ThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E86E25856F0EE604A04857 /* ThumbnailCache.swift */; };
 		DF20A72DD1E245D42B814601 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EAED5BAAD1D618BC5856BEF /* SettingsView.swift */; };
 		E34144E77D6225B49A1E2D2B /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC105AD9246824866F9815B8 /* Constants.swift */; };
+		E4BC39F7AF7BA3432457D4A7 /* ImageRotator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E245270BC7BCC38B089B42CB /* ImageRotator.swift */; };
 		E72675F81873D909C7166103 /* ZoomableImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68ADEF2538CD0730D8787E0F /* ZoomableImageView.swift */; };
 /* End PBXBuildFile section */
 
@@ -47,10 +51,13 @@
 		0C195C2BD5E6A0DE32CA4756 /* Util.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Util.swift; sourceTree = "<group>"; };
 		136F0AEA271E04C30969FE74 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1B1BE2303D621C4C78C622FA /* GlanceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GlanceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMetadata.swift; sourceTree = "<group>"; };
+		33E86E25856F0EE604A04857 /* ThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailCache.swift; sourceTree = "<group>"; };
 		380380B7A65C551DF9E1F604 /* AboutSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsPane.swift; sourceTree = "<group>"; };
 		41EBB1ADB88AE3BB9DB9A521 /* GeneralSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsPane.swift; sourceTree = "<group>"; };
 		48A25F305947468944E48272 /* GlanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceTests.swift; sourceTree = "<group>"; };
 		5BC9A3A3A4853E3C2721F613 /* ImageInfoPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageInfoPanel.swift; sourceTree = "<group>"; };
+		5C616E525B5B79990FEB1588 /* ImageCompareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCompareView.swift; sourceTree = "<group>"; };
 		5CBB1DC136F4AD73C629F084 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		6136D7398BDC5BA16D4B9257 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		68ADEF2538CD0730D8787E0F /* ZoomableImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableImageView.swift; sourceTree = "<group>"; };
@@ -60,35 +67,26 @@
 		811A1AAA72117DFB81F850BC /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
 		8A8204091DECCBD91A158543 /* ImageThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailView.swift; sourceTree = "<group>"; };
 		8B3B5673204724AF162823D7 /* GlanceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceApp.swift; sourceTree = "<group>"; };
+		9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRotatorTests.swift; sourceTree = "<group>"; };
 		9EAED5BAAD1D618BC5856BEF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B28E920EECDC0AE91E31BFD0 /* CropOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropOverlayView.swift; sourceTree = "<group>"; };
+		BDE57FF45E9EEB70485B4C87 /* MetadataManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataManagerTests.swift; sourceTree = "<group>"; };
 		D7B458974AAEA6CC71550618 /* ImagePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreviewView.swift; sourceTree = "<group>"; };
 		DA249A0296B5CB046DE115B1 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
+		E245270BC7BCC38B089B42CB /* ImageRotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRotator.swift; sourceTree = "<group>"; };
 		E6681C13BACBBD0D74A80EB4 /* Glance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Glance.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		EA2106B49E6EF342B6062082 /* Glance.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Glance.entitlements; sourceTree = "<group>"; };
-		EB0A462B14F573D5CC1A9C06 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		EC105AD9246824866F9815B8 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		F52335F6F978B8B64780E111 /* ToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarView.swift; sourceTree = "<group>"; };
 		F5D573B1ABE72ED5A9AAF260 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		F1692AA5A14C8B9B17915D27 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				508804CD84F27A12CF0C0AA0 /* SDWebImageSwiftUI in Frameworks */,
-				B7D0536BB572326DAE8768C3 /* LaunchAtLogin in Frameworks */,
-				1B589C60454C1C6B07BB50A0 /* SwiftUITooltip in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		02B4B839CCBB5C5B1D58F038 /* GlanceTests */ = {
 			isa = PBXGroup;
 			children = (
 				48A25F305947468944E48272 /* GlanceTests.swift */,
+				9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */,
+				BDE57FF45E9EEB70485B4C87 /* MetadataManagerTests.swift */,
 			);
 			path = GlanceTests;
 			sourceTree = "<group>";
@@ -106,6 +104,8 @@
 			children = (
 				6136D7398BDC5BA16D4B9257 /* AppLogger.swift */,
 				EC105AD9246824866F9815B8 /* Constants.swift */,
+				E245270BC7BCC38B089B42CB /* ImageRotator.swift */,
+				33E86E25856F0EE604A04857 /* ThumbnailCache.swift */,
 				0C195C2BD5E6A0DE32CA4756 /* Util.swift */,
 			);
 			path = Shared;
@@ -123,6 +123,8 @@
 		5C3A4E22E3E622DB2770E211 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				B28E920EECDC0AE91E31BFD0 /* CropOverlayView.swift */,
+				5C616E525B5B79990FEB1588 /* ImageCompareView.swift */,
 				5BC9A3A3A4853E3C2721F613 /* ImageInfoPanel.swift */,
 				D7B458974AAEA6CC71550618 /* ImagePreviewView.swift */,
 				8A8204091DECCBD91A158543 /* ImageThumbnailView.swift */,
@@ -169,6 +171,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		D7FD4B8F386381C8984C3534 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		EAFA1FE34D1C6A44114B1145 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
@@ -183,10 +193,9 @@
 				701B600AF6E272C5553ADC4F /* AppState.swift */,
 				F5D573B1ABE72ED5A9AAF260 /* Assets.xcassets */,
 				136F0AEA271E04C30969FE74 /* ContentView.swift */,
-				EA2106B49E6EF342B6062082 /* Glance.entitlements */,
 				8B3B5673204724AF162823D7 /* GlanceApp.swift */,
-				EB0A462B14F573D5CC1A9C06 /* Info.plist */,
 				7F17A562555BFE62BB6B17FA /* NavigationIdentifier.swift */,
+				D7FD4B8F386381C8984C3534 /* Models */,
 				6661292C7C989F93E14A0B4E /* Permission */,
 				7792EA58563B79317740B59B /* Resources */,
 				6ED07A27FA9711D08345A576 /* Settings */,
@@ -205,7 +214,6 @@
 			buildPhases = (
 				32DD4C8A891B8A91C685238C /* Sources */,
 				A3C361D35F468850BEF053AB /* Resources */,
-				F1692AA5A14C8B9B17915D27 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -213,9 +221,6 @@
 			);
 			name = Glance;
 			packageProductDependencies = (
-				8FB306D1F66CAE9EA53EDC03 /* SDWebImageSwiftUI */,
-				2EBE2959AAADF9D468607032 /* LaunchAtLogin */,
-				975AE6F44D6004E66747AC29 /* SwiftUITooltip */,
 			);
 			productName = Glance;
 			productReference = E6681C13BACBBD0D74A80EB4 /* Glance.app */;
@@ -260,12 +265,6 @@
 			);
 			mainGroup = 1A7345DEDC89903C9907667A;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				0D666FA13C605941FE94461F /* XCRemoteSwiftPackageReference "LaunchAtLogin-Modern" */,
-				FD74C7DA9A27A20846C22824 /* XCRemoteSwiftPackageReference "SDWebImage" */,
-				22E8E2E6863AF369A84817BD /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
-				C256B98118BE0FF58042E033 /* XCRemoteSwiftPackageReference "SwiftUI-Tooltip" */,
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 897E7B5C0E3778F8AD681930 /* Products */;
 			projectDirPath = "";
@@ -295,6 +294,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				068E80709F218D865B25BB90 /* GlanceTests.swift in Sources */,
+				4647F582C17C1D678C923513 /* ImageRotatorTests.swift in Sources */,
+				961E5D2EC3AC65D098F2580F /* MetadataManagerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -307,15 +308,20 @@
 				36025394FB362A306973A121 /* AppState.swift in Sources */,
 				E34144E77D6225B49A1E2D2B /* Constants.swift in Sources */,
 				51C5607A78ABAFDD018A2916 /* ContentView.swift in Sources */,
+				76EFB7B0A4F1EE313FFF421C /* CropOverlayView.swift in Sources */,
 				87954A2A5789F29831B647E2 /* GeneralSettingsPane.swift in Sources */,
 				605C2D8D599668AB26E228C5 /* GlanceApp.swift in Sources */,
+				997966AA149DB454402DB929 /* ImageCompareView.swift in Sources */,
 				1B108BC02E10D989AFEEDA39 /* ImageInfoPanel.swift in Sources */,
+				71F205D6CF781C5BA848F6B4 /* ImageMetadata.swift in Sources */,
 				C4C79171C69C4E2EC9AE6772 /* ImagePreviewView.swift in Sources */,
+				E4BC39F7AF7BA3432457D4A7 /* ImageRotator.swift in Sources */,
 				B32703677065B00F62794CDD /* ImageThumbnailView.swift in Sources */,
 				5FD5D2CB31026E6F804D2EA1 /* NavigationIdentifier.swift in Sources */,
 				C56988171FDAC1E7FA8AF407 /* PermissionsManager.swift in Sources */,
 				DF20A72DD1E245D42B814601 /* SettingsView.swift in Sources */,
 				2D31B5CBA4EA88AE060A6E52 /* SettingsWindow.swift in Sources */,
+				D2DC441F53CD4938DBC26191 /* ThumbnailCache.swift in Sources */,
 				348B3E8B71B05E4A9E510590 /* ThumbnailSidebar.swift in Sources */,
 				3B06F20FFCFF0882893EAEAC /* ToolbarView.swift in Sources */,
 				96D7F60F6F82736FD7C744EB /* Util.swift in Sources */,
@@ -339,14 +345,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sources/Glance/Glance.entitlements;
+				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Sources/Glance/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.Glance;
+				PRODUCT_NAME = Glance;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -355,6 +363,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -371,6 +380,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -421,7 +431,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -435,7 +444,7 @@
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PRODUCT_NAME = Glance;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -449,14 +458,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sources/Glance/Glance.entitlements;
+				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Sources/Glance/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.Glance;
+				PRODUCT_NAME = Glance;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -498,7 +509,6 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -520,7 +530,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_NAME = Glance;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -560,59 +570,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		0D666FA13C605941FE94461F /* XCRemoteSwiftPackageReference "LaunchAtLogin-Modern" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sindresorhus/LaunchAtLogin-Modern.git";
-			requirement = {
-				kind = revision;
-				revision = a04ec1c363be3627734f6dad757d82f5d4fa8fcc;
-			};
-		};
-		22E8E2E6863AF369A84817BD /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/SDWebImage/SDWebImageSwiftUI.git";
-			requirement = {
-				kind = revision;
-				revision = 0e331457ca9af2f0b08bcaa138a91ffb907b004f;
-			};
-		};
-		C256B98118BE0FF58042E033 /* XCRemoteSwiftPackageReference "SwiftUI-Tooltip" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/quassum/SwiftUI-Tooltip.git";
-			requirement = {
-				kind = revision;
-				revision = 3bef9a21e2bcf1d0f078ddf6731c3c8996f32c3e;
-			};
-		};
-		FD74C7DA9A27A20846C22824 /* XCRemoteSwiftPackageReference "SDWebImage" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/SDWebImage/SDWebImage.git";
-			requirement = {
-				kind = revision;
-				revision = 2de3a496eaf6df9a1312862adcfd54acd73c39c0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		2EBE2959AAADF9D468607032 /* LaunchAtLogin */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0D666FA13C605941FE94461F /* XCRemoteSwiftPackageReference "LaunchAtLogin-Modern" */;
-			productName = LaunchAtLogin;
-		};
-		8FB306D1F66CAE9EA53EDC03 /* SDWebImageSwiftUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 22E8E2E6863AF369A84817BD /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */;
-			productName = SDWebImageSwiftUI;
-		};
-		975AE6F44D6004E66747AC29 /* SwiftUITooltip */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = C256B98118BE0FF58042E033 /* XCRemoteSwiftPackageReference "SwiftUI-Tooltip" */;
-			productName = SwiftUITooltip;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 070164DEC24115A8F4F2D9F7 /* Project object */;
 }
