@@ -44,7 +44,49 @@ targets:
         BUNDLE_LOADER: $(TEST_HOST)
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Glance.app/Contents/MacOS/Glance
         CODE_SIGN_IDENTITY: "-"
+  GlanceiOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Sources/GlanceiOS
+      # Rating storage and filters are shared with the Mac app.
+      - path: Sources/Glance/Models/ImageMetadata.swift
+      - path: Sources/Glance/Shared/AppLogger.swift
+    info:
+      path: Sources/GlanceiOS/Info.plist
+      properties:
+        CFBundleDisplayName: 过目
+        CFBundleDevelopmentRegion: zh-Hans
+        NSPhotoLibraryUsageDescription: “过目”需要读取你的相册，帮你快速筛选照片。照片只在本机处理，不会上传。
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.Glance
+        PRODUCT_NAME: Glance
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTS_MACCATALYST: NO
+        GENERATE_INFOPLIST_FILE: NO
 schemes:
+  GlanceiOS:
+    build:
+      targets:
+        GlanceiOS: all
+    run:
+      config: Debug
   Glance:
     build:
       targets:

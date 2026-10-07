@@ -280,22 +280,3 @@ class AppState: ObservableObject {
         }
     }
 }
-
-public enum PhotoFilter: String, CaseIterable, Identifiable {
-    case all = "全部"
-    case keep = "保留"
-    case undecided = "不确定"
-    case discard = "丢弃"
-    
-    public var id: String { self.rawValue }
-    
-    public var iconName: String {
-        switch self {
-        case .all: return "photo.on.rectangle"
-        case .keep: return "flag.fill"
-        case .undecided: return "questionmark.circle"
-        case .discard: return "xmark.circle"
-        }
-    }
-}
-

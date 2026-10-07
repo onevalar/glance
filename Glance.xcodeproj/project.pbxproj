@@ -7,15 +7,24 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		067DA42AD55C858A63A7958E /* ZoomableImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0FFCAB55C3E4239D3777139 /* ZoomableImage.swift */; };
 		068E80709F218D865B25BB90 /* GlanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A25F305947468944E48272 /* GlanceTests.swift */; };
+		06F72F184EF0C8B1FA1AE78F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2F048264EA1BA039D935F7F2 /* Assets.xcassets */; };
 		1B108BC02E10D989AFEEDA39 /* ImageInfoPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC9A3A3A4853E3C2721F613 /* ImageInfoPanel.swift */; };
+		21439D4265B9AF56E41E0D8A /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6136D7398BDC5BA16D4B9257 /* AppLogger.swift */; };
 		2D31B5CBA4EA88AE060A6E52 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA249A0296B5CB046DE115B1 /* SettingsWindow.swift */; };
 		348B3E8B71B05E4A9E510590 /* ThumbnailSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C89555C34FAD0446F073046 /* ThumbnailSidebar.swift */; };
+		34DF0FA369FCADB0B140618D /* GlanceiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */; };
 		36025394FB362A306973A121 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 701B600AF6E272C5553ADC4F /* AppState.swift */; };
 		3B06F20FFCFF0882893EAEAC /* ToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52335F6F978B8B64780E111 /* ToolbarView.swift */; };
+		3B3FDDBCF0EC3F28A72A473C /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C841AE4CD2C2327AA89DC78 /* LibraryStore.swift */; };
 		42C10AC32FCBF42D1B631C29 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5CBB1DC136F4AD73C629F084 /* Localizable.xcstrings */; };
+		44EA53C748970BDC3DDBBF8E /* ViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CD1BAFE7871F4361C512921 /* ViewerView.swift */; };
 		4647F582C17C1D678C923513 /* ImageRotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */; };
+		4B812F92D64984FD2D762E12 /* RatingBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23618E3A65E5CA7F0930D837 /* RatingBar.swift */; };
 		4D132A76C356841D92A3278D /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6136D7398BDC5BA16D4B9257 /* AppLogger.swift */; };
+		4F15B3C04AF000FE487D2B32 /* PhotoImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1691AE19E06BB4AEF5B17F6 /* PhotoImageLoader.swift */; };
+		5139690AE7DCB3FBAAFE56C4 /* ThumbnailViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B57F63B7B132870EC988DDD /* ThumbnailViews.swift */; };
 		51C5607A78ABAFDD018A2916 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136F0AEA271E04C30969FE74 /* ContentView.swift */; };
 		547C0071596C2C0A2C56C639 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F5D573B1ABE72ED5A9AAF260 /* Assets.xcassets */; };
 		5FD5D2CB31026E6F804D2EA1 /* NavigationIdentifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F17A562555BFE62BB6B17FA /* NavigationIdentifier.swift */; };
@@ -26,11 +35,13 @@
 		961E5D2EC3AC65D098F2580F /* MetadataManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDE57FF45E9EEB70485B4C87 /* MetadataManagerTests.swift */; };
 		96D7F60F6F82736FD7C744EB /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C195C2BD5E6A0DE32CA4756 /* Util.swift */; };
 		997966AA149DB454402DB929 /* ImageCompareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C616E525B5B79990FEB1588 /* ImageCompareView.swift */; };
+		9EE8ADBEAA12A0EEA275185E /* ImageMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */; };
 		B32703677065B00F62794CDD /* ImageThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A8204091DECCBD91A158543 /* ImageThumbnailView.swift */; };
 		B3802B1EBCD3F3E2B5FFD483 /* AboutSettingsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 380380B7A65C551DF9E1F604 /* AboutSettingsPane.swift */; };
 		C4C79171C69C4E2EC9AE6772 /* ImagePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B458974AAEA6CC71550618 /* ImagePreviewView.swift */; };
 		C56988171FDAC1E7FA8AF407 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 811A1AAA72117DFB81F850BC /* PermissionsManager.swift */; };
 		D2DC441F53CD4938DBC26191 /* ThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E86E25856F0EE604A04857 /* ThumbnailCache.swift */; };
+		D8C0CDEB1201E9F2381013D0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73A8C06B3EAEF6D1C84A6E7 /* RootView.swift */; };
 		DF20A72DD1E245D42B814601 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EAED5BAAD1D618BC5856BEF /* SettingsView.swift */; };
 		E34144E77D6225B49A1E2D2B /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC105AD9246824866F9815B8 /* Constants.swift */; };
 		E4BC39F7AF7BA3432457D4A7 /* ImageRotator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E245270BC7BCC38B089B42CB /* ImageRotator.swift */; };
@@ -50,11 +61,17 @@
 /* Begin PBXFileReference section */
 		0C195C2BD5E6A0DE32CA4756 /* Util.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Util.swift; sourceTree = "<group>"; };
 		136F0AEA271E04C30969FE74 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1596A9F8D816B3B482AF3903 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1B1BE2303D621C4C78C622FA /* GlanceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GlanceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMetadata.swift; sourceTree = "<group>"; };
+		23618E3A65E5CA7F0930D837 /* RatingBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingBar.swift; sourceTree = "<group>"; };
+		2C841AE4CD2C2327AA89DC78 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
+		2F048264EA1BA039D935F7F2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		33E86E25856F0EE604A04857 /* ThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailCache.swift; sourceTree = "<group>"; };
 		380380B7A65C551DF9E1F604 /* AboutSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsPane.swift; sourceTree = "<group>"; };
+		3B57F63B7B132870EC988DDD /* ThumbnailViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailViews.swift; sourceTree = "<group>"; };
 		41EBB1ADB88AE3BB9DB9A521 /* GeneralSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsPane.swift; sourceTree = "<group>"; };
+		457D7EF8A4D45594587C664E /* GlanceiOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GlanceiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		48A25F305947468944E48272 /* GlanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceTests.swift; sourceTree = "<group>"; };
 		5BC9A3A3A4853E3C2721F613 /* ImageInfoPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageInfoPanel.swift; sourceTree = "<group>"; };
 		5C616E525B5B79990FEB1588 /* ImageCompareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCompareView.swift; sourceTree = "<group>"; };
@@ -63,16 +80,21 @@
 		68ADEF2538CD0730D8787E0F /* ZoomableImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableImageView.swift; sourceTree = "<group>"; };
 		6C89555C34FAD0446F073046 /* ThumbnailSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailSidebar.swift; sourceTree = "<group>"; };
 		701B600AF6E272C5553ADC4F /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		7CD1BAFE7871F4361C512921 /* ViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerView.swift; sourceTree = "<group>"; };
 		7F17A562555BFE62BB6B17FA /* NavigationIdentifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationIdentifier.swift; sourceTree = "<group>"; };
 		811A1AAA72117DFB81F850BC /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
 		8A8204091DECCBD91A158543 /* ImageThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailView.swift; sourceTree = "<group>"; };
 		8B3B5673204724AF162823D7 /* GlanceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceApp.swift; sourceTree = "<group>"; };
 		9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRotatorTests.swift; sourceTree = "<group>"; };
 		9EAED5BAAD1D618BC5856BEF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A1691AE19E06BB4AEF5B17F6 /* PhotoImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoImageLoader.swift; sourceTree = "<group>"; };
+		ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceiOSApp.swift; sourceTree = "<group>"; };
 		B28E920EECDC0AE91E31BFD0 /* CropOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropOverlayView.swift; sourceTree = "<group>"; };
 		BDE57FF45E9EEB70485B4C87 /* MetadataManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataManagerTests.swift; sourceTree = "<group>"; };
+		C73A8C06B3EAEF6D1C84A6E7 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		D7B458974AAEA6CC71550618 /* ImagePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreviewView.swift; sourceTree = "<group>"; };
 		DA249A0296B5CB046DE115B1 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
+		E0FFCAB55C3E4239D3777139 /* ZoomableImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableImage.swift; sourceTree = "<group>"; };
 		E245270BC7BCC38B089B42CB /* ImageRotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRotator.swift; sourceTree = "<group>"; };
 		E6681C13BACBBD0D74A80EB4 /* Glance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Glance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC105AD9246824866F9815B8 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
@@ -95,6 +117,7 @@
 			isa = PBXGroup;
 			children = (
 				F2474515FA68E084FFEB5F21 /* Glance */,
+				6159478A4575212AE359448F /* GlanceiOS */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -135,6 +158,23 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		6159478A4575212AE359448F /* GlanceiOS */ = {
+			isa = PBXGroup;
+			children = (
+				2F048264EA1BA039D935F7F2 /* Assets.xcassets */,
+				ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */,
+				1596A9F8D816B3B482AF3903 /* Info.plist */,
+				2C841AE4CD2C2327AA89DC78 /* LibraryStore.swift */,
+				A1691AE19E06BB4AEF5B17F6 /* PhotoImageLoader.swift */,
+				23618E3A65E5CA7F0930D837 /* RatingBar.swift */,
+				C73A8C06B3EAEF6D1C84A6E7 /* RootView.swift */,
+				3B57F63B7B132870EC988DDD /* ThumbnailViews.swift */,
+				7CD1BAFE7871F4361C512921 /* ViewerView.swift */,
+				E0FFCAB55C3E4239D3777139 /* ZoomableImage.swift */,
+			);
+			path = GlanceiOS;
+			sourceTree = "<group>";
+		};
 		6661292C7C989F93E14A0B4E /* Permission */ = {
 			isa = PBXGroup;
 			children = (
@@ -166,6 +206,7 @@
 			isa = PBXGroup;
 			children = (
 				E6681C13BACBBD0D74A80EB4 /* Glance.app */,
+				457D7EF8A4D45594587C664E /* GlanceiOS.app */,
 				1B1BE2303D621C4C78C622FA /* GlanceTests.xctest */,
 			);
 			name = Products;
@@ -208,6 +249,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		341778219227655B089C3FBA /* GlanceiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 71EB7165397805AE45E70DDE /* Build configuration list for PBXNativeTarget "GlanceiOS" */;
+			buildPhases = (
+				D3DE4B9D0B2DA8A4B3029EF5 /* Sources */,
+				EF3D02BB2371498E0954EC0C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GlanceiOS;
+			packageProductDependencies = (
+			);
+			productName = GlanceiOS;
+			productReference = 457D7EF8A4D45594587C664E /* GlanceiOS.app */;
+			productType = "com.apple.product-type.application";
+		};
 		5796247D68EDA6C8F0512954 /* Glance */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8812D40211E0FBEAED4F31C9 /* Build configuration list for PBXNativeTarget "Glance" */;
@@ -272,6 +331,7 @@
 			targets = (
 				5796247D68EDA6C8F0512954 /* Glance */,
 				730743D4A79A9CA460D4AAA3 /* GlanceTests */,
+				341778219227655B089C3FBA /* GlanceiOS */,
 			);
 		};
 /* End PBXProject section */
@@ -283,6 +343,14 @@
 			files = (
 				547C0071596C2C0A2C56C639 /* Assets.xcassets in Resources */,
 				42C10AC32FCBF42D1B631C29 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EF3D02BB2371498E0954EC0C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				06F72F184EF0C8B1FA1AE78F /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -329,6 +397,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D3DE4B9D0B2DA8A4B3029EF5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				21439D4265B9AF56E41E0D8A /* AppLogger.swift in Sources */,
+				34DF0FA369FCADB0B140618D /* GlanceiOSApp.swift in Sources */,
+				9EE8ADBEAA12A0EEA275185E /* ImageMetadata.swift in Sources */,
+				3B3FDDBCF0EC3F28A72A473C /* LibraryStore.swift in Sources */,
+				4F15B3C04AF000FE487D2B32 /* PhotoImageLoader.swift in Sources */,
+				4B812F92D64984FD2D762E12 /* RatingBar.swift in Sources */,
+				D8C0CDEB1201E9F2381013D0 /* RootView.swift in Sources */,
+				5139690AE7DCB3FBAAFE56C4 /* ThumbnailViews.swift in Sources */,
+				44EA53C748970BDC3DDBBF8E /* ViewerView.swift in Sources */,
+				067DA42AD55C858A63A7958E /* ZoomableImage.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -340,6 +425,26 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		47E28736258CC10722901508 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Sources/GlanceiOS/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.Glance;
+				PRODUCT_NAME = Glance;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		49F89CE9BD8B0507FE45958A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -393,6 +498,26 @@
 			};
 			name = Release;
 		};
+		A7D775BE4261BF4F3D96FE6A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Sources/GlanceiOS/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.Glance;
+				PRODUCT_NAME = Glance;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		B150CAF5937760C3EAA04123 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -445,7 +570,6 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -531,7 +655,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -547,6 +670,15 @@
 			buildConfigurations = (
 				F3EA50893C3F17C20F755C19 /* Debug */,
 				B150CAF5937760C3EAA04123 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		71EB7165397805AE45E70DDE /* Build configuration list for PBXNativeTarget "GlanceiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A7D775BE4261BF4F3D96FE6A /* Debug */,
+				47E28736258CC10722901508 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

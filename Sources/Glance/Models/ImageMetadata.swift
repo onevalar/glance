@@ -8,6 +8,24 @@ public enum ImageStatus: String, Codable, Sendable {
     case keep
 }
 
+public enum PhotoFilter: String, CaseIterable, Identifiable, Sendable {
+    case all = "全部"
+    case keep = "保留"
+    case undecided = "不确定"
+    case discard = "丢弃"
+    
+    public var id: String { self.rawValue }
+    
+    public var iconName: String {
+        switch self {
+        case .all: return "photo.on.rectangle"
+        case .keep: return "flag.fill"
+        case .undecided: return "questionmark.circle"
+        case .discard: return "xmark.circle"
+        }
+    }
+}
+
 public struct ImageMetadata: Codable, Equatable, Sendable {
     public var status: ImageStatus
     public var cropRect: CGRect? // Normalized crop rectangle (values in 0.0...1.0)
@@ -80,21 +98,32 @@ public class MetadataManager: ObservableObject {
     }
     
     public func getMetadata(for url: URL) -> ImageMetadata {
-        let key = cacheKey(for: url)
-        return metadataCache[key] ?? ImageMetadata()
+        getMetadata(forKey: cacheKey(for: url))
     }
     
     public func updateMetadata(for url: URL, update: (inout ImageMetadata) -> Void) {
-        let key = cacheKey(for: url)
+        updateMetadata(forKey: cacheKey(for: url), update: update)
+    }
+    
+    public func removeMetadata(for url: URL) {
+        removeMetadata(forKey: cacheKey(for: url))
+    }
+
+    // MARK: - Raw key access (iOS stores ratings under the photo library identifier)
+
+    public func getMetadata(forKey key: String) -> ImageMetadata {
+        metadataCache[key] ?? ImageMetadata()
+    }
+
+    public func updateMetadata(forKey key: String, update: (inout ImageMetadata) -> Void) {
         var meta = metadataCache[key] ?? ImageMetadata()
         update(&meta)
         metadataCache[key] = meta
         saveMetadata()
     }
-    
-    public func removeMetadata(for url: URL) {
-        let key = cacheKey(for: url)
-        metadataCache.removeValue(forKey: key)
+
+    public func removeMetadata(forKey key: String) {
+        guard metadataCache.removeValue(forKey: key) != nil else { return }
         saveMetadata()
     }
 }
