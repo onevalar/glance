@@ -13,16 +13,10 @@ final class GlanceImageView: NSView {
     var isDarkMode = false
     
     var cropRect: CGRect? {
-        didSet {
-            hasPerformedInitialFit = false
-            needsDisplay = true
-        }
+        didSet { resetFit() }
     }
     var isCropEditing = false {
-        didSet {
-            hasPerformedInitialFit = false
-            needsDisplay = true
-        }
+        didSet { resetFit() }
     }
 
     var magnification: CGFloat = 1.0 {
@@ -31,7 +25,11 @@ final class GlanceImageView: NSView {
     var offset: CGPoint = .zero {
         didSet { needsDisplay = true }
     }
+    /// Compare mode: reports (zoom relative to this view's own fit, pan as a fraction of the zoomed picture),
+    /// so pictures of different sizes stay aligned on the same relative spot.
     var onTransformChanged: ((CGFloat, CGPoint) -> Void)?
+    var isShared = false
+    private var sharedState: (zoom: CGFloat, pan: CGPoint) = (1, .zero)
     private var hasPerformedInitialFit = false
 
     private let minMag: CGFloat = 0.1
@@ -48,14 +46,23 @@ final class GlanceImageView: NSView {
         super.viewDidMoveToWindow()
         if window != nil, !hasPerformedInitialFit {
             DispatchQueue.main.async { [weak self] in
-                self?.fitToWindow()
+                self?.performInitialFitIfNeeded()
             }
         }
     }
 
     override func layout() {
         super.layout()
-        if !hasPerformedInitialFit, bounds.width > 0, bounds.height > 0 {
+        performInitialFitIfNeeded()
+    }
+
+    private func performInitialFitIfNeeded() {
+        guard !hasPerformedInitialFit, bounds.width > 0, bounds.height > 0 else { return }
+        if isShared {
+            // Compare mode owns the zoom: follow the shared state instead of resetting it.
+            hasPerformedInitialFit = true
+            applyShared(zoom: sharedState.zoom, pan: sharedState.pan)
+        } else {
             fitToWindow()
         }
     }
@@ -105,7 +112,8 @@ final class GlanceImageView: NSView {
     // MARK: - Scroll Wheel (Command + scroll = zoom)
 
     override func scrollWheel(with event: NSEvent) {
-        guard event.modifierFlags.contains(.command) else {
+        // The crop frame is laid out for the fitted picture, so the view must stay put while cropping.
+        guard !isCropEditing, event.modifierFlags.contains(.command) else {
             super.scrollWheel(with: event)
             return
         }
@@ -132,12 +140,13 @@ final class GlanceImageView: NSView {
 
         needsDisplay = true
         onStateChanged?(magnification)
-        onTransformChanged?(magnification, offset)
+        notifyTransform()
     }
 
     // MARK: - Magnify Gesture (trackpad pinch-to-zoom)
 
     override func magnify(with event: NSEvent) {
+        guard !isCropEditing else { return }
         // magnification is the delta since the last event, apply directly
         let factor = 1 + event.magnification
         let newMag = (magnification * factor).clamped(to: minMag...maxMag)
@@ -156,7 +165,7 @@ final class GlanceImageView: NSView {
         offset = CGPoint(x: newOffsetX, y: newOffsetY)
         needsDisplay = true
         onStateChanged?(magnification)
-        onTransformChanged?(magnification, offset)
+        notifyTransform()
     }
 
     // MARK: - Mouse Drag (pan)
@@ -169,6 +178,7 @@ final class GlanceImageView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard !isCropEditing else { return }
         let point = convert(event.locationInWindow, from: nil)
         let dx = point.x - dragStartPoint.x
         let dy = point.y - dragStartPoint.y
@@ -184,7 +194,7 @@ final class GlanceImageView: NSView {
 
         offset = CGPoint(x: newOffsetX, y: newOffsetY)
         needsDisplay = true
-        onTransformChanged?(magnification, offset)
+        notifyTransform()
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -195,6 +205,13 @@ final class GlanceImageView: NSView {
     }
 
     // MARK: - Fit to Window
+
+    /// Schedules a fit-to-window on the next layout pass.
+    func resetFit() {
+        hasPerformedInitialFit = false
+        needsLayout = true
+        needsDisplay = true
+    }
 
     func fitToWindow() {
         guard let image else { return }
@@ -217,7 +234,50 @@ final class GlanceImageView: NSView {
         needsDisplay = true
 
         onStateChanged?(magnification)
-        onTransformChanged?(magnification, offset)
+        notifyTransform()
+    }
+
+    // MARK: - Compare mode
+
+    /// Size of the picture region that is actually shown (respects the crop).
+    private var targetSize: NSSize? {
+        guard let image else { return nil }
+        if let crop = cropRect, !isCropEditing {
+            return NSSize(width: crop.width * image.size.width, height: crop.height * image.size.height)
+        }
+        return image.size
+    }
+
+    private var fitScale: CGFloat? {
+        guard let size = targetSize, size.width > 0, size.height > 0,
+              bounds.width > 0, bounds.height > 0 else { return nil }
+        return min(bounds.width / size.width, bounds.height / size.height)
+    }
+
+    /// Follows the shared compare state without reporting back (avoids feedback loops).
+    func applyShared(zoom: CGFloat, pan: CGPoint) {
+        sharedState = (zoom, pan)
+        guard let size = targetSize, let fit = fitScale else { return }
+        let mag = (fit * zoom).clamped(to: minMag...maxMag)
+        let scaleChanged = mag != magnification
+        magnification = mag
+        offset = CGPoint(x: pan.x * size.width * mag, y: pan.y * size.height * mag)
+        if scaleChanged { onStateChanged?(magnification) }
+    }
+
+    private func notifyTransform() {
+        guard let onTransformChanged else { return }
+        if isShared {
+            guard let size = targetSize, let fit = fitScale, magnification > 0 else { return }
+            let pan = CGPoint(
+                x: offset.x / (size.width * magnification),
+                y: offset.y / (size.height * magnification)
+            )
+            sharedState = (magnification / fit, pan)
+            onTransformChanged(magnification / fit, pan)
+        } else {
+            onTransformChanged(magnification, offset)
+        }
     }
 
     // MARK: - Toolbar Zoom Actions
@@ -240,7 +300,7 @@ final class GlanceImageView: NSView {
         offset.y = offset.y * scaleRatio
         needsDisplay = true
         onStateChanged?(magnification)
-        onTransformChanged?(magnification, offset)
+        notifyTransform()
     }
 }
 
@@ -261,8 +321,8 @@ struct GlanceImageRepresentable: NSViewRepresentable {
     var isCropEditing: Bool = false
     
     // Sharing binding state
-    var sharedMagnification: Binding<CGFloat>? = nil
-    var sharedOffset: Binding<CGPoint>? = nil
+    var sharedZoom: Binding<CGFloat>? = nil
+    var sharedPan: Binding<CGPoint>? = nil
     var isShared: Bool = false
     
     var onStateChanged: ((CGFloat) -> Void)?
@@ -278,15 +338,9 @@ struct GlanceImageRepresentable: NSViewRepresentable {
         view.onStateChanged = onStateChanged
         view.onClick = onClick
         
-        if isShared, let sharedMag = sharedMagnification, let sharedOff = sharedOffset {
-            view.magnification = sharedMag.wrappedValue
-            view.offset = sharedOff.wrappedValue
-            view.onTransformChanged = { mag, off in
-                DispatchQueue.main.async {
-                    if sharedMag.wrappedValue != mag { sharedMag.wrappedValue = mag }
-                    if sharedOff.wrappedValue != off { sharedOff.wrappedValue = off }
-                }
-            }
+        if isShared, let sharedZoom, let sharedPan {
+            view.isShared = true
+            view.onTransformChanged = Self.sharedUpdater(zoom: sharedZoom, pan: sharedPan)
         }
         
         DispatchQueue.main.async {
@@ -296,7 +350,15 @@ struct GlanceImageRepresentable: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: GlanceImageView, context: Context) {
-        nsView.image = image
+        if nsView.image !== image {
+            nsView.image = image
+            // Single-image mode: a new picture starts fitted to the window instead of
+            // inheriting the previous picture's zoom and pan. Compare mode rebuilds its
+            // NSImage instances on every render, so it must keep its shared transform.
+            if !isShared {
+                nsView.resetFit()
+            }
+        }
         nsView.isDarkMode = isDarkMode
         
         // Update crop properties first, so if they change it triggers redraw/re-layout
@@ -310,18 +372,18 @@ struct GlanceImageRepresentable: NSViewRepresentable {
         nsView.onStateChanged = onStateChanged
         nsView.onClick = onClick
         
-        if isShared, let sharedMag = sharedMagnification, let sharedOff = sharedOffset {
-            if nsView.magnification != sharedMag.wrappedValue {
-                nsView.magnification = sharedMag.wrappedValue
-            }
-            if nsView.offset != sharedOff.wrappedValue {
-                nsView.offset = sharedOff.wrappedValue
-            }
-            nsView.onTransformChanged = { mag, off in
-                DispatchQueue.main.async {
-                    if sharedMag.wrappedValue != mag { sharedMag.wrappedValue = mag }
-                    if sharedOff.wrappedValue != off { sharedOff.wrappedValue = off }
-                }
+        if isShared, let sharedZoom, let sharedPan {
+            nsView.isShared = true
+            nsView.onTransformChanged = Self.sharedUpdater(zoom: sharedZoom, pan: sharedPan)
+            nsView.applyShared(zoom: sharedZoom.wrappedValue, pan: sharedPan.wrappedValue)
+        }
+    }
+
+    private static func sharedUpdater(zoom: Binding<CGFloat>, pan: Binding<CGPoint>) -> (CGFloat, CGPoint) -> Void {
+        { newZoom, newPan in
+            DispatchQueue.main.async {
+                if zoom.wrappedValue != newZoom { zoom.wrappedValue = newZoom }
+                if pan.wrappedValue != newPan { pan.wrappedValue = newPan }
             }
         }
     }
@@ -339,8 +401,8 @@ struct ZoomableImageView: View {
     var isCropEditing: Bool = false
     
     // Sharing binding state
-    var sharedMagnification: Binding<CGFloat>? = nil
-    var sharedOffset: Binding<CGPoint>? = nil
+    var sharedZoom: Binding<CGFloat>? = nil
+    var sharedPan: Binding<CGPoint>? = nil
     var isShared: Bool = false
 
     var onScaleChanged: ((CGFloat) -> Void)?
@@ -353,8 +415,8 @@ struct ZoomableImageView: View {
             isDarkMode: colorScheme == .dark,
             cropRect: cropRect,
             isCropEditing: isCropEditing,
-            sharedMagnification: sharedMagnification,
-            sharedOffset: sharedOffset,
+            sharedZoom: sharedZoom,
+            sharedPan: sharedPan,
             isShared: isShared,
             onStateChanged: onScaleChanged,
             onViewCreated: onViewCreated,

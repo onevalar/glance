@@ -16,24 +16,30 @@ xcodebuild -scheme Glance -configuration Release -derivedDataPath build -destina
 
 ## Project Structure
 
-The codebase follows a modular SwiftUI architecture:
+Source lives in `Sources/Glance/`:
 
-- **GlanceApp.swift** - App entry point with `@main`, defines scenes (main window, settings, menu bar extra)
-- **AppState.swift** - Global application state (`@MainActor class`), manages image URLs, permissions, settings
-- **AppDelegate** - Handles file opening requests, window styling, and app lifecycle
+- **GlanceApp.swift** - `@main` entry (main window "过目", settings window, "照片" menu with rating/crop shortcuts) and `AppDelegate` (file-open requests, CLI argument, folder indexing and permission prompts)
+- **AppState.swift** - Global `@MainActor` state: `allImageFiles` (whole folder), `imageFiles` (after the rating filter), selection, filter, crop mode, bookmark permissions
+- **ContentView.swift** - Main view: composes the layers below, owns toolbar actions, delete, rotate and the auto-hiding chrome
 - **Views/**:
-  - **ContentView.swift** - Legacy main view with sidebar thumbnail navigation
-  - **LayoutView.swift** - New layout view with floating UI components
-  - **ZoomableImageView.swift** - Image view with pan/zoom support
-  - **ToolBarView.swift** - Bottom toolbar with navigation controls (note spelling: `ToolBarView`, not `ToolbarView`)
-  - **InfoBarView.swift** - Top info bar
-  - **NavigationFloatView.swift** - Left navigation panel
-- **Models/ViewState.swift** - Image transformation state (scale, offset, anchor, rotation)
+  - **ImagePreviewView.swift** - Single-image mode: loads the current image, arrow/Backspace key monitor, context menu
+  - **ZoomableImageView.swift** - `GlanceImageView` (custom `NSView` that draws, zooms and pans the image) + SwiftUI bridge
+  - **ImageCompareView.swift** - Multi-selection grid with synced zoom/pan
+  - **CropOverlayView.swift** - Non-destructive crop frame (only stores a normalized rect)
+  - **ThumbnailSidebar.swift / ImageThumbnailView.swift** - Left sidebar with rating filter, bulk "move discarded to Trash" and thumbnails
+  - **ToolbarView.swift** - Bottom toolbar; the struct is named `ToolBarView` (file name differs, keep it)
+  - **ImageInfoPanel.swift** - Right-hand info panel (name, pixels, size, date)
+- **Models/ImageMetadata.swift** - `ImageMetadata` (rating status + crop rect) and `MetadataManager`, persisted to `~/Library/Application Support/Glance/metadata.json` keyed by file path
+- **Settings/** - Settings window (General / About)
 - **Shared/**:
   - **AppLogger.swift** - `@AppLog` property wrapper for logging
+  - **ImageRotator.swift** - In-place rotation via ImageIO (keeps format, EXIF, DPI; refuses WebP and animated GIF)
+  - **ThumbnailCache.swift** - Async, cached thumbnail decoding
   - **Util.swift** - `ObjectAssociation` for ObjectiveC runtime associations
   - **Constants.swift** - App constants and identifiers
 - **Permission/PermissionsManager.swift** - Handles file system permissions with bookmark data
+
+`specs/` holds design notes (some describe plans that are not implemented, e.g. auto-update). There is no Sparkle dependency yet.
 
 ## Key Architecture Patterns
 
@@ -74,11 +80,21 @@ private var logger
 3. Files stored in `AppState.imageFiles: [URL]`
 4. `AppState.selectedImageIndex` tracks current image
 
-### View Hierarchy (LayoutView)
+### View Hierarchy (ContentView)
 ```
-LayoutView (GeometryReader)
-├── ZoomableImageView (background)
-├── InfoBarView (top, floating)
-├── NavigationFloatView (left, floating)
-└── ToolBarView (bottom, floating)
+ContentView (GeometryReader + ZStack)
+├── ThumbnailSidebar (left, hidden with the toolbar button; only when > 1 image)
+├── ImageInfoPanel (right, optional)
+├── ImagePreviewView → ZoomableImageView   (single selection)
+│   or ImageCompareView                    (2+ selected images)
+├── left / right navigation arrows
+├── ToolBarView (bottom, floating, auto-hides after 5s)
+└── CropOverlayView (only while cropping)
 ```
+The preview and crop overlay are both sized `geometry.height + 28`; keep them identical or the crop frame drifts off the picture.
+
+### Things to remember
+- Views talk through `NotificationCenter` names `"open-image"` (reload the current image) and `"metadata-updated"`.
+- Compare-mode zoom is stored relative to each picture's own fit and pan as a fraction of the zoomed picture, so photos of different sizes stay aligned.
+- Tests must never use `MetadataManager.shared` (it writes the real metadata file); create `MetadataManager(saveURL:)` with a temp file.
+- Supported formats: png, jpg, jpeg, gif, webp (HEIC/TIFF are not indexed).

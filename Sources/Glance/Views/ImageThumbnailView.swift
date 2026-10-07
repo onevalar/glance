@@ -13,6 +13,8 @@ struct ImageThumbnailView: View {
     let isSelected: Bool
     let isMultiSelected: Bool
 
+    @State private var thumbnail: NSImage?
+
     private var highlightColor: Color {
         colorScheme == .dark ? Color.yellow : Color.blue
     }
@@ -26,8 +28,8 @@ struct ImageThumbnailView: View {
         let isKeep = metadata.status == .keep
         
         ZStack(alignment: .topTrailing) {
-            if let image = NSImage(contentsOf: imageURL) {
-                Image(nsImage: image)
+            if let thumbnail {
+                Image(nsImage: thumbnail)
                     .resizable()
                     .scaledToFill()
                     .frame(width: 120, height: 90)
@@ -47,6 +49,7 @@ struct ImageThumbnailView: View {
                     .shadow(color: isSelected ? .black.opacity(colorScheme == .dark ? 0.25 : 0.15) : .clear, radius: 6, x: 0, y: 3)
                     .animation(.easeInOut(duration: 0.2), value: isSelected)
             } else {
+                // Placeholder while loading, or when the file cannot be decoded.
                 Image(systemName: "photo")
                     .font(.system(size: 32))
                     .foregroundStyle(.secondary)
@@ -71,5 +74,14 @@ struct ImageThumbnailView: View {
             }
         }
         .frame(width: 120, height: 90)
+        .task(id: imageURL) {
+            // The view can be reused for another file after a deletion; never show the old picture.
+            thumbnail = nil
+            thumbnail = await ThumbnailCache.thumbnail(for: imageURL)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("open-image"))) { _ in
+            // Rotation and crop post this after rewriting the file; reload so the sidebar follows.
+            Task { thumbnail = await ThumbnailCache.thumbnail(for: imageURL) }
+        }
     }
 }

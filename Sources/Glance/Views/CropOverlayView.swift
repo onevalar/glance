@@ -127,6 +127,7 @@ struct CropOverlayView: View {
                             .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
                     
                     Button(action: resetCrop) {
                         Text("重置")
@@ -163,6 +164,7 @@ struct CropOverlayView: View {
                             .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
                 }
                 .padding()
                 .background(.ultraThinMaterial)

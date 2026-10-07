@@ -116,30 +116,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logger.info("applicationDidFinishLaunching  .......")
-        print("[GLANCE DEBUG] applicationDidFinishLaunching started")
         appState?.activate(withPolicy: .regular)
-        print("[GLANCE DEBUG] appState activated")
         
         // Support launching from CLI with file path argument (e.g. swift run Glance /path/to/image.jpg)
         let arguments = CommandLine.arguments
-        print("[GLANCE DEBUG] arguments: \(arguments)")
         // The first argument is the binary path. If we have a second argument, try to open it as a file
         if arguments.count > 1 {
             let path = arguments[1]
-            print("[GLANCE DEBUG] argument path: \(path)")
             if !path.hasPrefix("-") && FileManager.default.fileExists(atPath: path) {
                 let url = URL(fileURLWithPath: path)
-                print("[GLANCE DEBUG] file url: \(url)")
                 logger.info("Opening image from CLI argument: \(url.path)")
                 loadImages(from: url)
-                print("[GLANCE DEBUG] loadImages finished")
                 NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
-                print("[GLANCE DEBUG] notification posted")
-            } else {
-                print("[GLANCE DEBUG] path does not exist or is flag: \(path)")
             }
-        } else {
-            print("[GLANCE DEBUG] no arguments count > 1")
         }
     }
 
@@ -160,7 +149,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        print("applicationShouldTerminate")
         return .terminateNow
     }
 
@@ -174,37 +162,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func loadImages(from url: URL) {
-        print("[GLANCE DEBUG] loadImages called with: \(url.path)")
         logger.info("loadImages from: \(url.path)")
         guard let appState else {
-            print("[GLANCE DEBUG] loadImages failed: appState is nil")
             return
         }
 
         // Check if URL is a directory
         var isDirectory: ObjCBool = false
         let fileExists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
-        print("[GLANCE DEBUG] fileExists: \(fileExists), isDirectory: \(isDirectory.boolValue)")
         
         if fileExists && isDirectory.boolValue {
             logger.info("Opening directory: \(url.path)")
             // Try indexing the directory directly
-            print("[GLANCE DEBUG] loadImages: indexing directory directly...")
-            if indexFolder(url, currentURL: url, keepAccess: false) {
+            switch indexFolder(url, currentURL: url, keepAccess: false) {
+            case .indexed:
                 logger.info("Indexed directory via bookmark/FDA: \(url.path)")
-                print("[GLANCE DEBUG] loadImages: indexFolder succeeded for \(url.path)")
-                return
+            case .noImages:
+                showEmptyFolderAlert(for: url)
+            case .noAccess:
+                // No permission — request permission for the directory
+                logger.info("No access to directory \(url.path), prompting user...")
+                promptFolderPermission(for: url, currentURL: url, isFolderOpen: true)
             }
-            
-            // No permission — request permission for the directory
-            logger.info("No access to directory \(url.path), prompting user...")
-            print("[GLANCE DEBUG] loadImages: indexFolder failed, prompting permission...")
-            promptFolderPermission(for: url, currentURL: url)
             return
         }
 
         // Regular file loading
-        print("[GLANCE DEBUG] loadImages: loading single file...")
         appState.allImageFiles = [url]
         appState.imageFiles = [url]
         appState.selectedImageIndex = 0
@@ -212,40 +195,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.currentImageURL = url
 
         guard UserDefaults.standard.object(forKey: "showCurDirImg") as? Bool ?? true else {
-            print("[GLANCE DEBUG] loadImages: showCurDirImg is false, skipping sibling folder indexing")
             return
         }
 
         let directory = url.deletingLastPathComponent()
-        print("[GLANCE DEBUG] loadImages: trying bookmark indexing for parent: \(directory.path)")
 
-        // Try existing bookmark access
-        if indexFolder(directory, currentURL: url) {
+        // Try existing bookmark access. A readable folder without other pictures is fine:
+        // the opened file is already on screen, so only a real access problem needs a prompt.
+        switch indexFolder(directory, currentURL: url) {
+        case .indexed:
             logger.info("Indexed via bookmark: \(directory.path)")
-            print("[GLANCE DEBUG] loadImages: indexFolder bookmark succeeded for parent")
-            return
+        case .noImages:
+            logger.info("No other supported images in \(directory.path)")
+        case .noAccess:
+            // No permission — request via NSOpenPanel
+            logger.info("No access to \(directory.path), prompting user...")
+            promptFolderPermission(for: directory, currentURL: url, isFolderOpen: false)
         }
+    }
 
-        // No permission — request via NSOpenPanel
-        logger.info("No access to \(directory.path), prompting user...")
-        print("[GLANCE DEBUG] loadImages: parent indexing failed, prompting permission for parent...")
-        promptFolderPermission(for: directory, currentURL: url)
+    private func showEmptyFolderAlert(for directory: URL) {
+        let alert = NSAlert()
+        alert.messageText = String(localized: "文件夹里没有可浏览的图片")
+        alert.informativeText = "\(directory.lastPathComponent)\n" + String(localized: "支持的格式：PNG、JPG、GIF、WebP")
+        alert.alertStyle = .informational
+        alert.runModal()
     }
 
     /// Request folder access permission via NSOpenPanel presented as a sheet on the main window.
-    func promptFolderPermission(for directory: URL, currentURL: URL) {
-        print("[GLANCE DEBUG] promptFolderPermission called for: \(directory.path)")
+    func promptFolderPermission(for directory: URL, currentURL: URL, isFolderOpen: Bool) {
         guard let appState else {
-            print("[GLANCE DEBUG] promptFolderPermission: appState is nil")
             return
         }
         guard let window = NSApplication.shared.windows.first(where: { $0.title == "过目" }) else {
             logger.warning("No 过目 window found for sheet")
-            print("[GLANCE DEBUG] promptFolderPermission: NO WINDOW FOUND named '过目' for sheet!")
             return
         }
 
-        print("[GLANCE DEBUG] promptFolderPermission: presenting NSOpenPanel...")
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -256,12 +242,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.prompt = String(localized: "允许")
 
         panel.beginSheetModal(for: window) { response in
-            print("[GLANCE DEBUG] promptFolderPermission NSOpenPanel sheet completion, response: \(response.rawValue)")
             guard response == .OK, let selectedURL = panel.url else { return }
 
-            print("[GLANCE DEBUG] promptFolderPermission: user approved, trying security scoped resource")
             let gotAccess = selectedURL.startAccessingSecurityScopedResource()
-            print("[GLANCE DEBUG] promptFolderPermission: startAccessingSecurityScopedResource: \(gotAccess)")
             guard gotAccess else { return }
 
             if !appState.dirs.contains(selectedURL) {
@@ -269,8 +252,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 appState.storeBookmarkData()
             }
 
-            self.indexFolder(selectedURL, currentURL: currentURL, keepAccess: true)
+            let result = self.indexFolder(selectedURL, currentURL: currentURL, keepAccess: true)
+            if result == .noImages, isFolderOpen {
+                self.showEmptyFolderAlert(for: selectedURL)
+            }
         }
+    }
+
+    enum IndexResult {
+        /// Images were found and loaded into the app state.
+        case indexed
+        /// The folder could not be read (missing permission).
+        case noAccess
+        /// The folder is readable but holds no supported images.
+        case noImages
     }
 
     /// Scan a directory for images.
@@ -278,53 +273,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     ///   and manages the scope lifecycle internally. If `true`, the caller already has access established
     ///   (via NSOpenPanel or Full Disk Access) and the security-scope check is skipped.
     @discardableResult
-    func indexFolder(_ directory: URL, currentURL: URL, keepAccess: Bool = false) -> Bool {
-        print("[GLANCE DEBUG] indexFolder called for: \(directory.path), keepAccess: \(keepAccess)")
+    func indexFolder(_ directory: URL, currentURL: URL, keepAccess: Bool = false) -> IndexResult {
         guard let appState else {
-            print("[GLANCE DEBUG] indexFolder: appState is nil")
-            return false
+            return .noAccess
         }
 
         var files: [URL]? = nil
         var startedHere = false
 
         // 1. First try direct read (no security scope access required, e.g. CLI non-sandbox or full disk access)
-        print("[GLANCE DEBUG] indexFolder: attempting direct directory read...")
         files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-        print("[GLANCE DEBUG] indexFolder: direct read got files: \(files != nil ? "\(files!.count) files" : "nil")")
 
         // 2. If direct read failed and we aren't bypassing security scope, try accessing via security scope
         if files == nil && !keepAccess {
-            print("[GLANCE DEBUG] indexFolder: direct read failed, trying startAccessingSecurityScopedResource...")
             startedHere = directory.startAccessingSecurityScopedResource()
-            print("[GLANCE DEBUG] indexFolder: startAccessingSecurityScopedResource returned: \(startedHere)")
             if startedHere {
                 files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-                print("[GLANCE DEBUG] indexFolder: security scoped read got files: \(files != nil ? "\(files!.count) files" : "nil")")
             }
         }
 
         defer {
             if startedHere {
-                print("[GLANCE DEBUG] indexFolder: stopping security scoped resource access")
                 directory.stopAccessingSecurityScopedResource()
             }
         }
 
         guard let files = files else {
             logger.warning("Cannot read directory: \(directory.path)")
-            print("[GLANCE DEBUG] indexFolder: files is nil (access denied), returning false")
-            return false
+            return .noAccess
         }
 
         let imageFiles = files
             .filter { Constants.supportedImageExtensions.contains($0.pathExtension.lowercased()) }
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
 
-        print("[GLANCE DEBUG] indexFolder: found \(imageFiles.count) image files")
         guard !imageFiles.isEmpty else {
-            print("[GLANCE DEBUG] indexFolder: imageFiles is empty, returning false")
-            return false
+            return .noImages
         }
 
         appState.allImageFiles = imageFiles
@@ -340,8 +324,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             appState.currentImageURL = appState.imageFiles[0]
         }
         logger.info("Indexed \(imageFiles.count) images in folder, filtered: \(appState.imageFiles.count)")
-        print("[GLANCE DEBUG] indexFolder complete, returning true")
 
-        return true
+        return .indexed
     }
 }

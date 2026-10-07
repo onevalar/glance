@@ -149,6 +149,29 @@ class AppState: ObservableObject {
         }
     }
 
+    /// Drops an image that no longer exists on disk from every list and cache,
+    /// then selects the neighbour that slid into its place.
+    func removeImage(_ url: URL) {
+        let previousIndex = selectedImageIndex
+
+        allImageFiles.removeAll { $0 == url }
+        imageFiles.removeAll { $0 == url }
+        MetadataManager.shared.removeMetadata(for: url)
+
+        guard !imageFiles.isEmpty else {
+            selectedImageIndex = 0
+            selectedImageIndices = []
+            currentImageURL = nil
+            isCropEditing = false
+            return
+        }
+
+        let index = min(previousIndex, imageFiles.count - 1)
+        selectedImageIndex = index
+        selectedImageIndices = [index]
+        currentImageURL = imageFiles[index]
+    }
+
     func bulkMoveDiscardedToTrash() {
         let manager = MetadataManager.shared
         let discardedURLs = allImageFiles.filter { url in

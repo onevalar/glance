@@ -23,6 +23,7 @@ struct ImagePreviewView: View {
 
     @State private var currentImage: NSImage?
     @State private var showFileImporter = false
+    @State private var keyMonitor: Any?
 
     var body: some View {
         Group {
@@ -80,10 +81,15 @@ struct ImagePreviewView: View {
             setupKeyEvents()
             refreshImage()
         }
+        .onDisappear {
+            removeKeyEvents()
+        }
     }
 
     func setupKeyEvents() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        // onAppear can fire more than once for the same view; never stack monitors.
+        removeKeyEvents()
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if appState.isCropEditing {
                 return event
             }
@@ -111,8 +117,16 @@ struct ImagePreviewView: View {
         }
     }
 
+    func removeKeyEvents() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+        }
+        keyMonitor = nil
+    }
+
     func refreshImage() {
         guard appState.imageFiles.indices.contains(appState.selectedImageIndex) else {
+            currentImage = nil
             return
         }
         let url = appState.imageFiles[appState.selectedImageIndex]

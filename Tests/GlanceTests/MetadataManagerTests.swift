@@ -23,7 +23,10 @@ struct MetadataTests {
     @Test("MetadataManager update and retrieve cache")
     @MainActor
     func testMetadataManagerCache() async throws {
-        let manager = MetadataManager.shared
+        // Use a throwaway file so the test never touches the real metadata.json.
+        let saveURL = FileManager.default.temporaryDirectory.appendingPathComponent("metadata-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: saveURL) }
+        let manager = MetadataManager(saveURL: saveURL)
         let dummyURL = URL(fileURLWithPath: "/tmp/dummy_image.jpg")
         
         // Initial state should be default (.undecided, nil)

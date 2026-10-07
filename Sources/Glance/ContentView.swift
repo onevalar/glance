@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var isChromeVisible = true
     @State private var chromeTimer: Timer?
     @State private var isInfoPanelVisible = false
+    @State private var compareZoom: CGFloat = 1.0
+    @State private var comparePan: CGPoint = .zero
 
     var body: some View {
         GeometryReader { geometry in
@@ -40,7 +42,11 @@ struct ContentView: View {
 
                 Group {
                     if appState.selectedImageIndices.count > 1 {
-                        ImageCompareView()
+                        ImageCompareView(
+                            sharedZoom: $compareZoom,
+                            sharedPan: $comparePan,
+                            onScaleChanged: { scale = CGSize(width: $0, height: $0) }
+                        )
                             .frame(width: geometry.size.width, height: geometry.size.height + 28)
                             .zIndex(10)
                     } else {
@@ -92,7 +98,9 @@ struct ContentView: View {
                    let image = NSImage(contentsOf: currentURL) {
                     CropOverlayView(
                         imageSize: image.size,
-                        viewSize: geometry.size,
+                        // Same box as the preview underneath (which is 28pt taller than the
+                        // GeometryReader), otherwise the frame and the picture drift apart.
+                        viewSize: CGSize(width: geometry.size.width, height: geometry.size.height + 28),
                         cropRect: Binding(
                             get: { MetadataManager.shared.getMetadata(for: currentURL).cropRect },
                             set: { _ in }
@@ -108,7 +116,7 @@ struct ContentView: View {
                             appState.isCropEditing = false
                         }
                     )
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .frame(width: geometry.size.width, height: geometry.size.height + 28)
                     .zIndex(30)
                 }
             }
@@ -148,16 +156,26 @@ struct ContentView: View {
 
     // MARK: - Toolbar Actions
 
+    private var isComparing: Bool { appState.selectedImageIndices.count > 1 }
+
     func handleToolbarTap(_ id: ToolbarActionIdentifier) {
         switch id {
         case .toggleNav:
             isNavBarVisible.toggle()
 
         case .scaleMinis:
-            glanceImageView?.zoomOut()
+            if isComparing {
+                compareZoom = (compareZoom * 0.8).clamped(to: 0.1...16)
+            } else {
+                glanceImageView?.zoomOut()
+            }
 
         case .scalePlus:
-            glanceImageView?.zoomIn()
+            if isComparing {
+                compareZoom = (compareZoom * 1.25).clamped(to: 0.1...16)
+            } else {
+                glanceImageView?.zoomIn()
+            }
 
         case .showPrev:
             navigateToPrevious()
@@ -166,19 +184,24 @@ struct ContentView: View {
             navigateToNext()
 
         case .centerFill:
-            glanceImageView?.fitToWindow()
+            if isComparing {
+                compareZoom = 1.0
+                comparePan = .zero
+            } else {
+                glanceImageView?.fitToWindow()
+            }
 
         case .toggleInfo:
             isInfoPanelVisible.toggle()
 
         case .rotateLeft:
             if let url = appState.currentImageURL {
-                rotateImage(at: url, by: -90)
+                rotateImage(at: url, direction: .counterClockwise)
             }
 
         case .rotateRight:
             if let url = appState.currentImageURL {
-                rotateImage(at: url, by: 90)
+                rotateImage(at: url, direction: .clockwise)
             }
 
         case .deleteImage:
@@ -224,18 +247,8 @@ struct ContentView: View {
                     logger.error("Failed to move to trash: \(error.localizedDescription)")
                     return
                 }
-                appState.imageFiles.removeAll { $0 == url }
-                if appState.imageFiles.isEmpty {
-                    appState.currentImageURL = nil
-                    appState.selectedImageIndex = 0
-                } else if appState.selectedImageIndex >= appState.imageFiles.count {
-                    appState.selectedImageIndex = appState.imageFiles.count - 1
-                    appState.currentImageURL = appState.imageFiles[appState.selectedImageIndex]
-                    NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
-                } else {
-                    appState.currentImageURL = appState.imageFiles[appState.selectedImageIndex]
-                    NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
-                }
+                appState.removeImage(url)
+                NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
                 logger.info("Moved to trash: \(url.lastPathComponent)")
             }
         }
@@ -243,43 +256,17 @@ struct ContentView: View {
 
     // MARK: - Rotation
 
-    func rotateImage(at url: URL, by degrees: CGFloat) {
-        guard let image = NSImage(contentsOf: url) else { return }
-
-        let isVerticalFlip = Int(abs(degrees)) % 180 == 90
-        let newSize = isVerticalFlip
-            ? NSSize(width: image.size.height, height: image.size.width)
-            : image.size
-
-        let rotated = NSImage(size: newSize, flipped: false) { rect in
-            let transform = NSAffineTransform()
-            transform.translateX(by: newSize.width / 2, yBy: newSize.height / 2)
-            transform.rotate(byDegrees: degrees)
-            transform.translateX(by: -image.size.width / 2, yBy: -image.size.height / 2)
-            transform.concat()
-            image.draw(in: NSRect(origin: .zero, size: image.size))
-            return true
-        }
-
-        guard let tiff = rotated.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff) else { return }
-
-        let ext = url.pathExtension.lowercased()
-        let data: Data?
-        switch ext {
-        case "png":  data = bitmap.representation(using: .png, properties: [:])
-        case "jpg", "jpeg": data = bitmap.representation(using: .jpeg, properties: [:])
-        case "gif":  data = bitmap.representation(using: .gif, properties: [:])
-        case "webp": data = bitmap.representation(using: .png, properties: [:])
-        default:     data = bitmap.representation(using: .png, properties: [:])
-        }
-
-        guard let data else { return }
+    func rotateImage(at url: URL, direction: ImageRotator.Direction) {
         do {
-            try data.write(to: url)
+            try ImageRotator.rotate(url, direction: direction)
             NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
         } catch {
-            logger.error("Failed to save rotated image: \(error.localizedDescription)")
+            logger.error("Failed to rotate image: \(error.localizedDescription)")
+            let alert = NSAlert()
+            alert.messageText = String(localized: "无法旋转")
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .informational
+            alert.runModal()
         }
     }
 

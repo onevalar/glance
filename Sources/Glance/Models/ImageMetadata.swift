@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import OSLog
 
 public enum ImageStatus: String, Codable {
     case discard
@@ -25,7 +26,12 @@ public class MetadataManager: ObservableObject {
     
     private let queue = DispatchQueue(label: "com.glance.metadata.save", qos: .background)
     
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "", category: "Metadata")
+
+    private let customSaveURL: URL?
+
     private var saveURL: URL {
+        if let customSaveURL { return customSaveURL }
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         let appSupport = paths[0].appendingPathComponent("Glance", isDirectory: true)
         // Ensure folder exists
@@ -33,7 +39,13 @@ public class MetadataManager: ObservableObject {
         return appSupport.appendingPathComponent("metadata.json")
     }
     
-    private init() {
+    private convenience init() {
+        self.init(saveURL: nil)
+    }
+
+    /// Pass a custom `saveURL` (e.g. in tests) to keep the user's real metadata file untouched.
+    public init(saveURL: URL?) {
+        self.customSaveURL = saveURL
         loadMetadata()
     }
     
@@ -43,7 +55,7 @@ public class MetadataManager: ObservableObject {
             let decoder = JSONDecoder()
             self.metadataCache = try decoder.decode([String: ImageMetadata].self, from: data)
         } catch {
-            print("Failed to decode metadata: \(error), resetting cache.")
+            Self.logger.error("Failed to decode metadata: \(error), resetting cache.")
             self.metadataCache = [:]
             saveMetadata()
         }
@@ -58,7 +70,7 @@ public class MetadataManager: ObservableObject {
                 let data = try encoder.encode(cache)
                 try data.write(to: url)
             } catch {
-                print("Failed to save metadata: \(error)")
+                Self.logger.error("Failed to save metadata: \(error)")
             }
         }
     }
