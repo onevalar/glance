@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A button that opens the app's Settings window via the app menu.
 struct OpenSettingsButton: View {
@@ -22,6 +23,7 @@ struct OpenSettingsButton: View {
 
 @main
 struct GlanceApp: App {
+    @AppStorage("glance.appearance") private var appearance = GlanceAppearance.system.rawValue
     @AppLog(category: "GlanceApp")
     private var logger
 
@@ -38,10 +40,17 @@ struct GlanceApp: App {
     var body: some Scene {
         Window("过目", id: "main") {
             ContentView()
-}
+                .preferredColorScheme(GlanceAppearance(rawValue: appearance)?.scheme)
+                .tint(GlancePalette.accent)
+                .frame(minWidth: 720, minHeight: 520)
+        }
         .windowStyle(.hiddenTitleBar)
         .defaultPosition(.center)
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("打开照片…") { appDelegate.chooseImages() }
+                    .keyboardShortcut("o", modifiers: .command)
+            }
             CommandGroup(replacing: .appSettings) {
                 OpenSettingsButton()
             }
@@ -102,6 +111,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var logger
 
     private var appState: AppState?
+    private var hasExplicitOpenRequest = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         logger.info("---- app will finish launch")
@@ -125,11 +135,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let path = arguments[1]
             if !path.hasPrefix("-") && FileManager.default.fileExists(atPath: path) {
                 let url = URL(fileURLWithPath: path)
+                hasExplicitOpenRequest = true
                 logger.info("Opening image from CLI argument: \(url.path)")
                 loadImages(from: url)
                 NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
             }
         }
+        // Finder's open event has priority over restoring a previous session.
+        DispatchQueue.main.async { [weak self] in self?.restoreBrowsingSessionIfNeeded() }
+    }
+
+    private func restoreBrowsingSessionIfNeeded() {
+        guard !hasExplicitOpenRequest, let appState, appState.allImageFiles.isEmpty,
+              UserDefaults.standard.string(forKey: "glance.startup") == GlanceStartup.resume.rawValue,
+              let saved = try? appState.browsingSession.resolve() else { return }
+        loadImages(from: saved.resource, allowPermissionPrompt: false)
+        if let index = appState.imageFiles.firstIndex(of: saved.selectedPhoto) {
+            appState.selectSingleImage(index: index)
+        }
+        NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -138,6 +162,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        hasExplicitOpenRequest = true
         logger.info("application open urls")
         guard let currentImageURL = urls.first else {
             logger.warning("no url in urls")
@@ -149,6 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        appState?.releaseOpenResource()
         return .terminateNow
     }
 
@@ -161,11 +187,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.appState = appState
     }
 
-    func loadImages(from url: URL) {
+    func chooseImages() {
+        guard let window = NSApplication.shared.windows.first(where: { $0.identifier?.rawValue == "main" || $0.title == "过目" }),
+              window.attachedSheet == nil else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.allowedContentTypes = [.image, .folder]
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.loadImages(from: url)
+            NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
+        }
+    }
+
+    func loadImages(from url: URL, allowPermissionPrompt: Bool = true) {
         logger.info("loadImages from: \(url.path)")
         guard let appState else {
             return
         }
+
+        guard appState.acquireReadAccess(to: url) else { return }
 
         // Check if URL is a directory
         var isDirectory: ObjCBool = false
@@ -176,16 +220,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Try indexing the directory directly
             switch indexFolder(url, currentURL: url, keepAccess: false) {
             case .indexed:
+                appState.recentLocations.record(url, imageCount: appState.allImageFiles.count, isDirectory: true)
+                appState.rememberBrowsingResource(url)
                 logger.info("Indexed directory via bookmark/FDA: \(url.path)")
             case .noImages:
-                showEmptyFolderAlert(for: url)
+                if allowPermissionPrompt { showEmptyFolderAlert(for: url) }
             case .noAccess:
                 // No permission — request permission for the directory
                 logger.info("No access to directory \(url.path), prompting user...")
-                promptFolderPermission(for: url, currentURL: url, isFolderOpen: true)
+                if allowPermissionPrompt { promptFolderPermission(for: url, currentURL: url, isFolderOpen: true) }
             }
             return
         }
+
+        // Keep the current photo and history unchanged if a recent file was moved or corrupted.
+        guard fileExists, NSImage(contentsOf: url) != nil else {
+            guard allowPermissionPrompt else { return }
+            let alert = NSAlert()
+            alert.messageText = String(localized: "这个最近记录无法打开，请重新选择图片或文件夹。")
+            alert.runModal()
+            return
+        }
+        appState.recentLocations.record(url, imageCount: 1, isDirectory: false)
 
         // Regular file loading
         appState.allImageFiles = [url]
@@ -193,6 +249,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.selectedImageIndex = 0
         appState.selectedImageIndices = [0]
         appState.currentImageURL = url
+        appState.rememberBrowsingResource(url)
 
         guard UserDefaults.standard.object(forKey: "showCurDirImg") as? Bool ?? true else {
             return
@@ -204,13 +261,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // the opened file is already on screen, so only a real access problem needs a prompt.
         switch indexFolder(directory, currentURL: url) {
         case .indexed:
+            appState.recentLocations.record(url, imageCount: appState.allImageFiles.count, isDirectory: false)
             logger.info("Indexed via bookmark: \(directory.path)")
         case .noImages:
             logger.info("No other supported images in \(directory.path)")
         case .noAccess:
             // No permission — request via NSOpenPanel
             logger.info("No access to \(directory.path), prompting user...")
-            promptFolderPermission(for: directory, currentURL: url, isFolderOpen: false)
+            if allowPermissionPrompt { promptFolderPermission(for: directory, currentURL: url, isFolderOpen: false) }
         }
     }
 
@@ -253,6 +311,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             let result = self.indexFolder(selectedURL, currentURL: currentURL, keepAccess: true)
+            if result == .indexed {
+                appState.recentLocations.record(isFolderOpen ? selectedURL : currentURL,
+                                               imageCount: appState.allImageFiles.count, isDirectory: isFolderOpen)
+                appState.rememberBrowsingResource(isFolderOpen ? selectedURL : currentURL)
+            }
             if result == .noImages, isFolderOpen {
                 self.showEmptyFolderAlert(for: selectedURL)
             }

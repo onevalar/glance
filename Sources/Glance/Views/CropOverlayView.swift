@@ -1,489 +1,179 @@
-//
-//  CropOverlayView.swift
-//  Glance
-//
-
 import SwiftUI
-
-enum CropRatio: String, CaseIterable, Identifiable {
-    case free = "自由"
-    case square = "1:1"
-    case fourThree = "4:3"
-    case sixteenNine = "16:9"
-    case twoThree = "2:3"
-    
-    var id: String { self.rawValue }
-    
-    var value: CGFloat? {
-        switch self {
-        case .free: return nil
-        case .square: return 1.0
-        case .fourThree: return 4.0 / 3.0
-        case .sixteenNine: return 16.0 / 9.0
-        case .twoThree: return 2.0 / 3.0
-        }
-    }
-}
 
 struct CropOverlayView: View {
     @Environment(\.colorScheme) private var colorScheme
-    
-    let imageSize: CGSize
-    let viewSize: CGSize
-    @Binding var cropRect: CGRect? // Normalized rect (0...1)
-    
+    let image: NSImage
+    let filename: String
     let onCommit: (CGRect) -> Void
     let onCancel: () -> Void
-    
-    @State private var cropBoxFrame: CGRect = .zero
-    @State private var selectedRatio: CropRatio = .free
-    @State private var isDragging: Bool = false
-    
-    // Compute the standard fitted image frame in view bounds
-    private var imageFrame: CGRect {
-        let hRatio = viewSize.width / imageSize.width
-        let vRatio = viewSize.height / imageSize.height
-        let scale = min(hRatio, vRatio)
-        
-        let w = imageSize.width * scale
-        let h = imageSize.height * scale
-        let x = (viewSize.width - w) / 2
-        let y = (viewSize.height - h) / 2
-        return CGRect(x: x, y: y, width: w, height: h)
+    @State private var session: CropSession
+    @State private var gestureStart: CGRect?
+
+    init(image: NSImage, filename: String, cropRect: CGRect?, onCommit: @escaping (CGRect) -> Void, onCancel: @escaping () -> Void) {
+        self.image = image; self.filename = filename; self.onCommit = onCommit; self.onCancel = onCancel
+        _session = State(initialValue: CropSession(rect: cropRect))
     }
-    
+
     var body: some View {
-        ZStack {
-            // 1. Dim Outer Overlay (EO Fill)
-            DimOverlayShape(imageFrame: imageFrame, cropBox: cropBoxFrame)
-                .fill(Color.black.opacity(0.6), style: FillStyle(eoFill: true))
-                .allowsHitTesting(false)
-            
-            // 2. Crop Box Border & Rule of Thirds
-            ZStack {
-                // Outer Border of the Crop Box
-                Rectangle()
-                    .stroke(Color.white, lineWidth: 2)
-                    .shadow(color: .black.opacity(0.5), radius: 2)
-                
-                // Rule of Thirds Lines (only visible during drag)
-                if isDragging {
-                    GeometryReader { boxGeo in
-                        let w = boxGeo.size.width
-                        let h = boxGeo.size.height
-                        
-                        // Vertical lines
-                        Path { p in
-                            p.move(to: CGPoint(x: w / 3, y: 0))
-                            p.addLine(to: CGPoint(x: w / 3, y: h))
-                            p.move(to: CGPoint(x: 2 * w / 3, y: 0))
-                            p.addLine(to: CGPoint(x: 2 * w / 3, y: h))
-                        }
-                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                        
-                        // Horizontal lines
-                        Path { p in
-                            p.move(to: CGPoint(x: 0, y: h / 3))
-                            p.addLine(to: CGPoint(x: w, y: h / 3))
-                            p.move(to: CGPoint(x: 0, y: 2 * h / 3))
-                            p.addLine(to: CGPoint(x: w, y: 2 * h / 3))
-                        }
-                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                    }
-                }
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text(filename).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                Text("裁剪").foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Button("重置") { session.reset() }.buttonStyle(.bordered)
+                Button("取消", action: onCancel).buttonStyle(.bordered).keyboardShortcut(.cancelAction)
+                Button("完成") { onCommit(session.rect) }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
-            .frame(width: cropBoxFrame.width, height: cropBoxFrame.height)
-            .position(x: cropBoxFrame.midX, y: cropBoxFrame.midY)
-            .allowsHitTesting(false)
-            
-            // 3. Drag Handles
-            ZStack {
-                // Corners
-                CornerHandle(position: .topLeft, boxFrame: $cropBoxFrame, imageFrame: imageFrame, ratio: selectedRatio.value, isDragging: $isDragging)
-                CornerHandle(position: .topRight, boxFrame: $cropBoxFrame, imageFrame: imageFrame, ratio: selectedRatio.value, isDragging: $isDragging)
-                CornerHandle(position: .bottomLeft, boxFrame: $cropBoxFrame, imageFrame: imageFrame, ratio: selectedRatio.value, isDragging: $isDragging)
-                CornerHandle(position: .bottomRight, boxFrame: $cropBoxFrame, imageFrame: imageFrame, ratio: selectedRatio.value, isDragging: $isDragging)
-                
-                // Edges (only active for free ratios)
-                if selectedRatio == .free {
-                    EdgeHandle(position: .top, boxFrame: $cropBoxFrame, imageFrame: imageFrame, isDragging: $isDragging)
-                    EdgeHandle(position: .bottom, boxFrame: $cropBoxFrame, imageFrame: imageFrame, isDragging: $isDragging)
-                    EdgeHandle(position: .left, boxFrame: $cropBoxFrame, imageFrame: imageFrame, isDragging: $isDragging)
-                    EdgeHandle(position: .right, boxFrame: $cropBoxFrame, imageFrame: imageFrame, isDragging: $isDragging)
-                }
-            }
-            .allowsHitTesting(true)
-            
-            // 4. Floating Control Bar (Top)
-            VStack {
-                HStack(spacing: 16) {
-                    Button(action: onCancel) {
-                        Text("取消")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding([.leading, .trailing], 12)
-                            .padding([.top, .bottom], 6)
-                            .background(Color.white.opacity(0.15))
-                            .cornerRadius(4)
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.cancelAction)
-                    
-                    Button(action: resetCrop) {
-                        Text("重置")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding([.leading, .trailing], 12)
-                            .padding([.top, .bottom], 6)
-                            .background(Color.white.opacity(0.15))
-                            .cornerRadius(4)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    // Ratio Selector
-                    Picker("", selection: $selectedRatio) {
-                        ForEach(CropRatio.allCases) { ratio in
-                            Text(ratio.rawValue).tag(ratio)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 240)
-                    .onChange(of: selectedRatio) { _, newRatio in
-                        applyAspectRatio(newRatio)
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: commitCrop) {
-                        Text("应用")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.black)
-                            .padding([.leading, .trailing], 16)
-                            .padding([.top, .bottom], 6)
-                            .background(Color.yellow)
-                            .cornerRadius(4)
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.defaultAction)
-                }
-                .padding()
-                .background(.ultraThinMaterial)
-                .cornerRadius(8)
-                .shadow(radius: 5)
-                .padding(.top, 40)
-                .padding([.leading, .trailing], 24)
-                
-                Spacer()
+            .controlSize(.large)
+            .padding(.leading, 80).padding(.trailing, 24)
+            .frame(height: 68)
+            .background(GlancePalette.raised(colorScheme))
+            Divider()
+            HStack(spacing: 0) {
+                GeometryReader { viewport in cropCanvas(size: viewport.size) }
+                    .background(GlancePalette.canvas(colorScheme))
+                Divider()
+                cropInspector
             }
         }
-        .onAppear {
-            initializeCropBox()
-        }
-        .onChange(of: viewSize) { _, _ in
-            initializeCropBox()
-        }
+        .font(.system(size: 13))
+        .tint(GlancePalette.accent)
+        .background(GlancePalette.canvas(colorScheme))
     }
-    
-    private func initializeCropBox() {
-        let currentNormalized = cropRect ?? CGRect(x: 0, y: 0, width: 1, height: 1)
-        
-        let x = imageFrame.minX + currentNormalized.origin.x * imageFrame.width
-        let y = imageFrame.minY + currentNormalized.origin.y * imageFrame.height
-        let w = currentNormalized.width * imageFrame.width
-        let h = currentNormalized.height * imageFrame.height
-        
-        self.cropBoxFrame = CGRect(x: x, y: y, width: w, height: h)
-        self.selectedRatio = .free
-    }
-    
-    private func resetCrop() {
-        self.cropBoxFrame = imageFrame
-        self.selectedRatio = .free
-    }
-    
-    private func commitCrop() {
-        let normX = (cropBoxFrame.minX - imageFrame.minX) / imageFrame.width
-        let normY = (cropBoxFrame.minY - imageFrame.minY) / imageFrame.height
-        let normW = cropBoxFrame.width / imageFrame.width
-        let normH = cropBoxFrame.height / imageFrame.height
-        
-        let normRect = CGRect(x: normX, y: normY, width: normW, height: normH)
-        onCommit(normRect)
-    }
-    
-    private func applyAspectRatio(_ ratio: CropRatio) {
-        guard let ratioVal = ratio.value else { return }
-        
-        let cx = cropBoxFrame.midX
-        let cy = cropBoxFrame.midY
-        
-        var newW = cropBoxFrame.width
-        var newH = newW / ratioVal
-        
-        if newH > imageFrame.height {
-            newH = imageFrame.height
-            newW = newH * ratioVal
+
+    private var cropInspector: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("裁剪").font(.system(size: 20, weight: .semibold))
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("比例").foregroundStyle(.secondary)
+                    Picker("裁剪比例", selection: Binding(get: { session.ratio }, set: { session.selectRatio($0, imageSize: image.size) })) {
+                        ForEach(CropRatio.allCases) { ratio in Text(LocalizedStringKey(ratio.rawValue)).tag(ratio) }
+                    }
+                    .labelsHidden().pickerStyle(.menu).controlSize(.large).frame(maxWidth: .infinity)
+                }
+                Text("拖动边角调整范围，拖动框内移动。")
+                    .font(.system(size: 15)).fixedSize(horizontal: false, vertical: true)
+                Text("Esc 取消，完成后保存裁剪区域。")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("原图始终保留").font(.system(size: 18, weight: .semibold))
+                    Text("仅记录裁剪范围。重新进入裁剪可重置到原图。")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                .background(GlancePalette.control(colorScheme), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .padding(24).frame(maxWidth: .infinity, alignment: .leading)
         }
-        if newW > imageFrame.width {
-            newW = imageFrame.width
-            newH = newW / ratioVal
+        .frame(width: 260)
+        .background(GlancePalette.raised(colorScheme))
+    }
+
+    private func cropCanvas(size: CGSize) -> some View {
+        let frame = CropGeometry.imageFrame(imageSize: image.size, viewport: size)
+        let box = session.displayRect(in: frame)
+        return ZStack(alignment: .topLeading) {
+            Image(nsImage: image).resizable().frame(width: frame.width, height: frame.height)
+                .position(x: frame.midX, y: frame.midY).accessibilityHidden(true)
+            CropMask(imageFrame: frame, box: box).fill(.black.opacity(0.6), style: FillStyle(eoFill: true)).allowsHitTesting(false)
+            Rectangle().fill(.white.opacity(0.001)).frame(width: box.width, height: box.height)
+                .contentShape(Rectangle())
+                .gesture(cropGesture(frame: frame, handle: nil))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("移动裁剪区域")
+                .accessibilityValue(cropValue)
+                .position(x: box.midX, y: box.midY)
+            CropGrid().stroke(.white.opacity(0.6), lineWidth: 1)
+                .frame(width: box.width, height: box.height).position(x: box.midX, y: box.midY).allowsHitTesting(false)
+            Rectangle().stroke(.white, lineWidth: 2)
+                .frame(width: box.width, height: box.height).position(x: box.midX, y: box.midY).allowsHitTesting(false)
+            ForEach(CropHandle.allCases, id: \.self) { handle in
+                if handle.isCorner || session.ratio == .free {
+                    let point = handle.point(in: box)
+                    CropHandleMark(handle: handle).stroke(.white, lineWidth: 3)
+                        .frame(width: 16, height: 16).shadow(color: .black.opacity(0.5), radius: 1)
+                        .frame(width: 32, height: 32).contentShape(Rectangle())
+                        .gesture(cropGesture(frame: frame, handle: handle))
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(handle.label).accessibilityValue(cropValue)
+                        .accessibilityAdjustableAction { direction in
+                            let distance: CGFloat = direction == .increment ? 8 : -8
+                            let delta = CGSize(width: handle.direction.x * distance, height: handle.direction.y * distance)
+                            session.update(displayRect: CropGeometry.resized(box, handle: handle, by: delta, in: frame, ratio: session.ratio.value), imageFrame: frame)
+                        }
+                        .position(x: point.x, y: point.y)
+                }
+            }
         }
-        
-        let newX = cx - newW / 2
-        let newY = cy - newH / 2
-        
-        cropBoxFrame = clampBox(CGRect(x: newX, y: newY, width: newW, height: newH), in: imageFrame)
+        .frame(width: size.width, height: size.height).coordinateSpace(name: "cropCanvas").clipped()
+    }
+
+    private var cropValue: String {
+        String(format: String(localized: "宽 %d%%，高 %d%%"), Int((session.rect.width * 100).rounded()), Int((session.rect.height * 100).rounded()))
+    }
+
+    private func cropGesture(frame: CGRect, handle: CropHandle?) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("cropCanvas"))
+            .onChanged { value in
+                if gestureStart == nil { gestureStart = session.rect }
+                let original = CropSession(rect: gestureStart)
+                let box = original.displayRect(in: frame)
+                let next = handle.map { CropGeometry.resized(box, handle: $0, by: value.translation, in: frame, ratio: session.ratio.value) }
+                    ?? CropGeometry.moved(box, by: value.translation, in: frame)
+                session.update(displayRect: next, imageFrame: frame)
+            }
+            .onEnded { _ in gestureStart = nil }
     }
 }
 
-// Even-Odd Overlay Shape
-struct DimOverlayShape: Shape {
+private struct CropMask: Shape {
     let imageFrame: CGRect
-    let cropBox: CGRect
-    
+    let box: CGRect
+    func path(in rect: CGRect) -> Path { var path = Path(); path.addRect(imageFrame); path.addRect(box); return path }
+}
+
+private struct CropGrid: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.addRect(imageFrame)
-        path.addRect(cropBox)
-        return path
-    }
-}
-
-// Handles Placement & Drag Logic
-enum HandleCorner {
-    case topLeft, topRight, bottomLeft, bottomRight
-}
-
-struct CornerHandle: View {
-    let position: HandleCorner
-    @Binding var boxFrame: CGRect
-    let imageFrame: CGRect
-    let ratio: CGFloat?
-    @Binding var isDragging: Bool
-    
-    private var positionPoint: CGPoint {
-        switch position {
-        case .topLeft: return CGPoint(x: boxFrame.minX, y: boxFrame.minY)
-        case .topRight: return CGPoint(x: boxFrame.maxX, y: boxFrame.minY)
-        case .bottomLeft: return CGPoint(x: boxFrame.minX, y: boxFrame.maxY)
-        case .bottomRight: return CGPoint(x: boxFrame.maxX, y: boxFrame.maxY)
-        }
-    }
-    
-    var body: some View {
-        ZStack {
-            // Corner visual mark
-            CornerMarkShape(corner: position)
-                .stroke(Color.white, lineWidth: 3)
-                .frame(width: 16, height: 16)
-                .shadow(color: .black.opacity(0.5), radius: 1)
-        }
-        .frame(width: 32, height: 32) // Larger touch target
-        .background(Color.white.opacity(0.01))
-        .position(x: positionPoint.x, y: positionPoint.y)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { val in
-                    isDragging = true
-                    handleDrag(val.location)
-                }
-                .onEnded { _ in
-                    isDragging = false
-                }
-        )
-    }
-    
-    private func handleDrag(_ location: CGPoint) {
-        var newBox = boxFrame
-        let minSize: CGFloat = 40
-        
-        let loc = CGPoint(
-            x: max(imageFrame.minX, min(imageFrame.maxX, location.x)),
-            y: max(imageFrame.minY, min(imageFrame.maxY, location.y))
-        )
-        
-        switch position {
-        case .topLeft:
-            let w = boxFrame.maxX - loc.x
-            let h = boxFrame.maxY - loc.y
-            if w >= minSize && h >= minSize {
-                if let ratio = ratio {
-                    // Lock ratio
-                    let adjustedH = w / ratio
-                    if boxFrame.maxY - adjustedH >= imageFrame.minY {
-                        newBox = CGRect(x: loc.x, y: boxFrame.maxY - adjustedH, width: w, height: adjustedH)
-                    }
-                } else {
-                    newBox = CGRect(x: loc.x, y: loc.y, width: w, height: h)
-                }
-            }
-        case .topRight:
-            let w = loc.x - boxFrame.minX
-            let h = boxFrame.maxY - loc.y
-            if w >= minSize && h >= minSize {
-                if let ratio = ratio {
-                    let adjustedH = w / ratio
-                    if boxFrame.maxY - adjustedH >= imageFrame.minY {
-                        newBox = CGRect(x: boxFrame.minX, y: boxFrame.maxY - adjustedH, width: w, height: adjustedH)
-                    }
-                } else {
-                    newBox = CGRect(x: boxFrame.minX, y: loc.y, width: w, height: h)
-                }
-            }
-        case .bottomLeft:
-            let w = boxFrame.maxX - loc.x
-            let h = loc.y - boxFrame.minY
-            if w >= minSize && h >= minSize {
-                if let ratio = ratio {
-                    let adjustedH = w / ratio
-                    if boxFrame.minY + adjustedH <= imageFrame.maxY {
-                        newBox = CGRect(x: loc.x, y: boxFrame.minY, width: w, height: adjustedH)
-                    }
-                } else {
-                    newBox = CGRect(x: loc.x, y: boxFrame.minY, width: w, height: h)
-                }
-            }
-        case .bottomRight:
-            let w = loc.x - boxFrame.minX
-            let h = loc.y - boxFrame.minY
-            if w >= minSize && h >= minSize {
-                if let ratio = ratio {
-                    let adjustedH = w / ratio
-                    if boxFrame.minY + adjustedH <= imageFrame.maxY {
-                        newBox = CGRect(x: boxFrame.minX, y: boxFrame.minY, width: w, height: adjustedH)
-                    }
-                } else {
-                    newBox = CGRect(x: boxFrame.minX, y: boxFrame.minY, width: w, height: h)
-                }
-            }
-        }
-        
-        boxFrame = clampBox(newBox, in: imageFrame)
-    }
-}
-
-struct CornerMarkShape: Shape {
-    let corner: HandleCorner
-    
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let w = rect.width
-        let h = rect.height
-        
-        switch corner {
-        case .topLeft:
-            path.move(to: CGPoint(x: 0, y: h))
-            path.addLine(to: CGPoint(x: 0, y: 0))
-            path.addLine(to: CGPoint(x: w, y: 0))
-        case .topRight:
-            path.move(to: CGPoint(x: 0, y: 0))
-            path.addLine(to: CGPoint(x: w, y: 0))
-            path.addLine(to: CGPoint(x: w, y: h))
-        case .bottomLeft:
-            path.move(to: CGPoint(x: 0, y: 0))
-            path.addLine(to: CGPoint(x: 0, y: h))
-            path.addLine(to: CGPoint(x: w, y: h))
-        case .bottomRight:
-            path.move(to: CGPoint(x: 0, y: h))
-            path.addLine(to: CGPoint(x: w, y: h))
-            path.addLine(to: CGPoint(x: w, y: 0))
+        for fraction in [CGFloat(1 / 3.0), CGFloat(2 / 3.0)] {
+            path.move(to: CGPoint(x: rect.width * fraction, y: 0)); path.addLine(to: CGPoint(x: rect.width * fraction, y: rect.height))
+            path.move(to: CGPoint(x: 0, y: rect.height * fraction)); path.addLine(to: CGPoint(x: rect.width, y: rect.height * fraction))
         }
         return path
     }
 }
 
-enum HandleEdge {
-    case top, bottom, left, right
-}
-
-struct EdgeHandle: View {
-    let position: HandleEdge
-    @Binding var boxFrame: CGRect
-    let imageFrame: CGRect
-    @Binding var isDragging: Bool
-    
-    private var centerPoint: CGPoint {
-        switch position {
-        case .top: return CGPoint(x: boxFrame.midX, y: boxFrame.minY)
-        case .bottom: return CGPoint(x: boxFrame.midX, y: boxFrame.maxY)
-        case .left: return CGPoint(x: boxFrame.minX, y: boxFrame.midY)
-        case .right: return CGPoint(x: boxFrame.maxX, y: boxFrame.midY)
+private struct CropHandleMark: Shape {
+    let handle: CropHandle
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let direction = handle.direction
+        if handle.isCorner {
+            let corner = handle.point(in: rect)
+            path.move(to: CGPoint(x: corner.x, y: rect.midY))
+            path.addLine(to: corner)
+            path.addLine(to: CGPoint(x: rect.midX, y: corner.y))
+        } else if direction.x == 0 {
+            path.move(to: CGPoint(x: 0, y: rect.midY)); path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        } else {
+            path.move(to: CGPoint(x: rect.midX, y: 0)); path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
         }
-    }
-    
-    var body: some View {
-        ZStack {
-            // Edge line marker
-            Capsule()
-                .fill(Color.white)
-                .frame(
-                    width: (position == .top || position == .bottom) ? 24 : 4,
-                    height: (position == .top || position == .bottom) ? 4 : 24
-                )
-                .shadow(color: .black.opacity(0.5), radius: 1)
-        }
-        .frame(
-            width: (position == .top || position == .bottom) ? 48 : 32,
-            height: (position == .top || position == .bottom) ? 32 : 48
-        )
-        .background(Color.white.opacity(0.01))
-        .position(x: centerPoint.x, y: centerPoint.y)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { val in
-                    isDragging = true
-                    handleDrag(val.location)
-                }
-                .onEnded { _ in
-                    isDragging = false
-                }
-        )
-    }
-    
-    private func handleDrag(_ location: CGPoint) {
-        var newBox = boxFrame
-        let minSize: CGFloat = 40
-        
-        let loc = CGPoint(
-            x: max(imageFrame.minX, min(imageFrame.maxX, location.x)),
-            y: max(imageFrame.minY, min(imageFrame.maxY, location.y))
-        )
-        
-        switch position {
-        case .top:
-            let h = boxFrame.maxY - loc.y
-            if h >= minSize {
-                newBox.origin.y = loc.y
-                newBox.size.height = h
-            }
-        case .bottom:
-            let h = loc.y - boxFrame.minY
-            if h >= minSize {
-                newBox.size.height = h
-            }
-        case .left:
-            let w = boxFrame.maxX - loc.x
-            if w >= minSize {
-                newBox.origin.x = loc.x
-                newBox.size.width = w
-            }
-        case .right:
-            let w = loc.x - boxFrame.minX
-            if w >= minSize {
-                newBox.size.width = w
-            }
-        }
-        
-        boxFrame = clampBox(newBox, in: imageFrame)
+        return path
     }
 }
 
-// Helpers
-func clampBox(_ box: CGRect, in bounds: CGRect) -> CGRect {
-    let minX = max(bounds.minX, min(bounds.maxX, box.minX))
-    let minY = max(bounds.minY, min(bounds.maxY, box.minY))
-    let maxX = max(bounds.minX, min(bounds.maxX, box.maxX))
-    let maxY = max(bounds.minY, min(bounds.maxY, box.maxY))
-    
-    return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+private extension CropHandle {
+    var label: LocalizedStringKey {
+        switch self {
+        case .topLeft: "调整左上角"
+        case .top: "调整上边缘"
+        case .topRight: "调整右上角"
+        case .right: "调整右边缘"
+        case .bottomRight: "调整右下角"
+        case .bottom: "调整下边缘"
+        case .bottomLeft: "调整左下角"
+        case .left: "调整左边缘"
+        }
+    }
 }

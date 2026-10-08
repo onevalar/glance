@@ -53,6 +53,7 @@ targets:
       # Rating storage and filters are shared with the Mac app.
       - path: Sources/Glance/Models/ImageMetadata.swift
       - path: Sources/Glance/Shared/AppLogger.swift
+      - path: Sources/Glance/Shared/GlanceAppearance.swift
     info:
       path: Sources/GlanceiOS/Info.plist
       properties:

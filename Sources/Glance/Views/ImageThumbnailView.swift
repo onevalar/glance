@@ -16,7 +16,7 @@ struct ImageThumbnailView: View {
     @State private var thumbnail: NSImage?
 
     private var highlightColor: Color {
-        colorScheme == .dark ? Color.yellow : Color.blue
+        GlancePalette.accent
     }
     
     private var metadata: ImageMetadata {

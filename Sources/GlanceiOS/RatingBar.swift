@@ -10,6 +10,7 @@ struct RatingBar: View {
     @EnvironmentObject private var store: LibraryStore
     @ObservedObject private var metadata = MetadataManager.shared
     @AppStorage("autoAdvance") private var autoAdvance = true
+    @Environment(\.colorScheme) private var scheme
 
     private var current: ImageStatus? {
         store.currentID.map { metadata.getMetadata(forKey: $0).status }
@@ -17,9 +18,9 @@ struct RatingBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            button(.discard, title: "丢弃", icon: "xmark", tint: .red, keys: ("1", "x"))
-            button(.undecided, title: "不确定", icon: "questionmark", tint: .orange, keys: ("2", "u"))
-            button(.keep, title: "保留", icon: "flag.fill", tint: .green, keys: ("3", "p"))
+            button(.discard, title: "丢弃", icon: "xmark", keys: ("1", "x"))
+            button(.undecided, title: "待定", icon: "questionmark", keys: ("2", "u"))
+            button(.keep, title: "保留", icon: "flag.fill", keys: ("3", "p"))
         }
     }
 
@@ -27,7 +28,6 @@ struct RatingBar: View {
         _ status: ImageStatus,
         title: String,
         icon: String,
-        tint: Color,
         keys: (Character, Character)
     ) -> some View {
         let isOn = current == status
@@ -35,10 +35,17 @@ struct RatingBar: View {
             store.rate(status, advance: autoAdvance)
         } label: {
             Label(title, systemImage: icon)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .foregroundStyle(isOn ? Color.white : tint)
-                .background(isOn ? tint : tint.opacity(0.15), in: .rect(cornerRadius: 12))
+                .foregroundStyle(status == .keep ? (isOn ? .white : GlancePalette.accent) : .primary)
+                .background(status == .keep ? (isOn ? GlancePalette.accent : GlancePalette.accentSoft(scheme))
+                            : GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(isOn ? GlancePalette.accent : GlancePalette.border(scheme), lineWidth: isOn ? 1.5 : 0.5)
+                }
         }
         .buttonStyle(.plain)
         .keyboardShortcut(KeyEquivalent(keys.0), modifiers: [])
@@ -50,6 +57,7 @@ struct RatingBar: View {
                 .accessibilityHidden(true)
         }
         .disabled(store.currentID == nil)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
         .sensoryFeedback(.selection, trigger: isOn)
     }
 }

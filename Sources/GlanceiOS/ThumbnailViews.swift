@@ -35,7 +35,7 @@ struct ThumbnailCell: View {
             .opacity(status == .discard ? 0.4 : 1)
             .overlay {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 3)
+                    RoundedRectangle(cornerRadius: 6).stroke(GlancePalette.accent, lineWidth: 2)
                 }
             }
 
@@ -47,7 +47,7 @@ struct ThumbnailCell: View {
                     .padding(4)
             case .keep:
                 Image(systemName: "flag.circle.fill")
-                    .foregroundStyle(.white, .green)
+                    .foregroundStyle(.white, GlancePalette.accent)
                     .font(.system(size: 16))
                     .padding(4)
             case .undecided:
@@ -69,6 +69,7 @@ struct ThumbnailCell: View {
 struct ThumbnailStrip: View {
     @EnvironmentObject private var store: LibraryStore
     let axis: Axis
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var cellSize: CGSize {
         axis == .horizontal ? CGSize(width: 52, height: 68) : CGSize(width: 112, height: 84)
@@ -87,7 +88,7 @@ struct ThumbnailStrip: View {
             }
             .onChange(of: store.currentID) { _, id in
                 guard let id else { return }
-                withAnimation(.easeInOut(duration: 0.2)) { reader.scrollTo(id, anchor: .center) }
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { reader.scrollTo(id, anchor: .center) }
             }
             .onAppear {
                 if let id = store.currentID { reader.scrollTo(id, anchor: .center) }
@@ -96,10 +97,15 @@ struct ThumbnailStrip: View {
     }
 
     private var cells: some View {
-        ForEach(store.visible, id: \.localIdentifier) { asset in
-            ThumbnailCell(asset: asset, size: cellSize, isSelected: asset.localIdentifier == store.currentID)
-                .id(asset.localIdentifier)
-                .onTapGesture { store.select(asset) }
+        ForEach(Array(store.visible.enumerated()), id: \.element.localIdentifier) { index, asset in
+            Button { store.select(asset) } label: {
+                ThumbnailCell(asset: asset, size: cellSize, isSelected: asset.localIdentifier == store.currentID)
+            }
+            .buttonStyle(.plain)
+            .id(asset.localIdentifier)
+            .accessibilityLabel("照片 \(index + 1)")
+            .accessibilityValue(asset.creationDate?.formatted(date: .abbreviated, time: .omitted) ?? "")
+            .accessibilityAddTraits(asset.localIdentifier == store.currentID ? .isSelected : [])
         }
     }
 }

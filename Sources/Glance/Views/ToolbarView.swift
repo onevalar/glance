@@ -1,167 +1,66 @@
-//
-//  ToolBarView.swift
-//  Glance
-//
-//  Created by 李旭 on 2024/9/15.
-//
-
 import AppKit
 import SwiftUI
 
 struct ToolBarView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var appState: AppState
-
     let scale: CGSize
-
     let onTap: (_ actionID: ToolbarActionIdentifier) -> Void
     var onHoverEnter: (() -> Void)?
     var onHoverExit: (() -> Void)?
 
-    var scaleFormated: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .percent
-        formatter.maximumFractionDigits = 0
-        formatter.minimumFractionDigits = 0
-
-        if let formattedString = formatter.string(from: NSNumber(value: scale.width)) {
-            return formattedString
-        } else {
-            return ""
-        }
-    }
-
-    var indexFormated: String {
-        return "\(appState.selectedImageIndex + 1)/\(appState.imageFiles.count)"
-    }
-
+    private var comparing: Bool { appState.selectedImageIndices.count > 1 }
+    private var hasImage: Bool { appState.currentImageURL != nil }
     var body: some View {
-        HStack(spacing: 6) {
-            Button(action: {
-                self.onTap(.scaleMinis)
-            }) {
-                Image(systemName: "minus.circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Zoom out")
-
-            Text(scaleFormated).foregroundStyle(.primary)
-                .monospacedDigit()
-                .frame(minWidth: 44)
-
-            Button(action: {
-                self.onTap(.scalePlus)
-            }) {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Zoom in")
-
-            Button(action: {
-                self.onTap(.showPrev)
-            }) {
-                Image(systemName: "chevron.left.circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Previous picture")
-
-            Text(indexFormated).foregroundStyle(.primary)
-
-            Button(action: {
-                self.onTap(.showNext)
-            }) {
-                Image(systemName: "chevron.right.circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Next picture")
-
-            Button(action: {
-                self.onTap(.centerFill)
-            }) {
-                Image(systemName: "rectangle.center.inset.filled")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Fit to window")
-
-            Divider()
-
-            Button(action: {
-                self.onTap(.rotateLeft)
-            }) {
-                Image(systemName: "arrow.counterclockwise.circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Rotate left")
-
-            Button(action: {
-                self.onTap(.rotateRight)
-            }) {
-                Image(systemName: "arrow.clockwise.circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Rotate right")
-
-            Button(action: {
-                self.onTap(.deleteImage)
-            }) {
-                Image(systemName: "trash.circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Delete Picture")
-
-            Divider()
-
-            Button(action: {
-                self.onTap(.toggleNav)
-            }) {
-                Image(systemName: "square.leadingthird.inset.filled")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Toggle navigation")
-
-            Button(action: {
-                self.onTap(.toggleInfo)
-            }) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }.buttonStyle(PlainButtonStyle())
-                .help("Picture info")
+        HStack(spacing: 4) {
+            control("sidebar.left", title: "Toggle navigation", action: .toggleNav)
+            separator
+            control("minus", title: "Zoom out", action: .scaleMinis)
+            Text(scale.width, format: .percent.precision(.fractionLength(0)))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .frame(minWidth: 43)
+                .accessibilityLabel(Text("缩放比例"))
+            control("plus", title: "Zoom in", action: .scalePlus)
+            control("arrow.up.left.and.arrow.down.right", title: "Fit to window", action: .centerFill)
+            separator
+            control("chevron.left", title: "Previous picture", action: .showPrev,
+                    disabled: appState.selectedImageIndex <= 0)
+            Text("\(appState.selectedImageIndex + 1) / \(appState.imageFiles.count)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary).frame(minWidth: 47)
+            control("chevron.right", title: "Next picture", action: .showNext,
+                    disabled: appState.selectedImageIndex >= appState.imageFiles.count - 1)
+            separator
+            control("arrow.counterclockwise", title: "Rotate left", action: .rotateLeft, disabled: comparing)
+            control("arrow.clockwise", title: "Rotate right", action: .rotateRight, disabled: comparing)
+            control("trash", title: "Delete Picture", action: .deleteImage, disabled: comparing)
+            separator
+            control("info.circle", title: "Picture info", action: .toggleInfo)
         }
-        .padding([.leading, .trailing], 10)
-        .padding([.top, .bottom], 8)
-        .frame(height: 42)
-        .background(colorScheme == .dark ? Color.gray.opacity(0.6) : Color.white.opacity(1))
-        .clipShape(.rect(cornerRadius: 4))
-        .shadow(radius: 2)
+        .padding(.horizontal, 9).padding(.vertical, 7)
+        .background(GlancePalette.raised(colorScheme), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(GlancePalette.border(colorScheme), lineWidth: 1))
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.20 : 0.06), radius: 12, y: 4)
         .onHover { hovering in
-            if hovering {
-                onHoverEnter?()
-            } else {
-                onHoverExit?()
-            }
+            if hovering { onHoverEnter?() } else { onHoverExit?() }
         }
+    }
+    private var separator: some View { Divider().frame(height: 16).padding(.horizontal, 6) }
+    private func control(_ symbol: String, title: LocalizedStringKey, action: ToolbarActionIdentifier,
+                         disabled: Bool = false) -> some View {
+        Button { onTap(action) } label: {
+            Image(systemName: symbol).font(.system(size: 13, weight: .regular))
+                .frame(width: 28, height: 28).contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.primary)
+        .disabled(disabled || !hasImage)
+        .accessibilityLabel(Text(title))
+        .help(Text(title))
     }
 }
 
 enum ToolbarActionIdentifier: String, Hashable {
-    case scaleMinis
-    case scalePlus
-    case showPrev
-    case showNext
-    case toggleNav
-    case toggleInfo
-    case centerFill
-    case rotateLeft
-    case rotateRight
-    case deleteImage
+    case scaleMinis, scalePlus, showPrev, showNext, toggleNav, toggleInfo, centerFill
+    case rotateLeft, rotateRight, deleteImage
 }

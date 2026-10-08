@@ -13,6 +13,7 @@ struct GlanceiOSApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .tint(GlancePalette.accent)
         }
     }
 }

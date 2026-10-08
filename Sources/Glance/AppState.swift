@@ -14,10 +14,44 @@ class AppState: ObservableObject {
     @AppLog(category: "AppState")
     private var logger
 
+    let recentLocations = RecentLocationStore()
+    let browsingSession = BrowsingSessionStore()
+    private var browsingResource: URL?
+    private var activeOpenResource: URL?
+
+    func rememberBrowsingResource(_ url: URL) {
+        browsingResource = url
+        rememberCurrentPhoto()
+    }
+
+    private func rememberCurrentPhoto() {
+        guard let browsingResource, let currentImageURL else { return }
+        browsingSession.record(resource: browsingResource, selectedPhoto: currentImageURL)
+    }
+
+    /// Keep the selected resource alive across single-image/compare view replacement.
+    func acquireReadAccess(to url: URL) -> Bool {
+        guard url.isFileURL else { return false }
+        if activeOpenResource == url { return true }
+        if url.startAccessingSecurityScopedResource() {
+            activeOpenResource?.stopAccessingSecurityScopedResource()
+            activeOpenResource = url
+            return true
+        }
+        return FileManager.default.isReadableFile(atPath: url.path)
+    }
+
+    func releaseOpenResource() {
+        activeOpenResource?.stopAccessingSecurityScopedResource()
+        activeOpenResource = nil
+    }
+
     // Master list of all images in the folder
     var allImageFiles: [URL] = []
 
-    @Published var currentImageURL: URL?
+    @Published var currentImageURL: URL? {
+        didSet { rememberCurrentPhoto() }
+    }
     @Published var imageFiles: [URL] = []
     @Published var selectedImageIndex: Int = 0
     @Published var selectedImageIndices: Set<Int> = []

@@ -22,11 +22,14 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     override init(frame: CGRect) {
         super.init(frame: frame)
         delegate = self
+        clipsToBounds = true
         showsHorizontalScrollIndicator = false
         showsVerticalScrollIndicator = false
         contentInsetAdjustmentBehavior = .never
         bouncesZoom = true
         decelerationRate = .fast
+        // At fit, horizontal drags belong to the outer photo pager. Keep pinch zoom enabled.
+        panGestureRecognizer.isEnabled = false
 
         imageView.contentMode = .scaleAspectFit
         addSubview(imageView)
@@ -70,6 +73,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         minimumZoomScale = 1
         maximumZoomScale = min(max(actualPixels, 4), 20)
         didReportZoomedIn = false
+        panGestureRecognizer.isEnabled = false
         onZoomChange?(false)
     }
 
@@ -86,7 +90,9 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerImage()
-        onZoomChange?(zoomScale > 1.01)
+        let isZoomed = zoomScale > 1.01
+        panGestureRecognizer.isEnabled = isZoomed
+        onZoomChange?(isZoomed)
         if zoomScale > 1.3, !didReportZoomedIn {
             didReportZoomedIn = true
             onZoomedIn?()
@@ -101,13 +107,13 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
         if zoomScale > 1.01 {
-            setZoomScale(1, animated: true)
+            setZoomScale(1, animated: !UIAccessibility.isReduceMotionEnabled)
         } else {
             let target = min(3, maximumZoomScale)
             let point = gesture.location(in: imageView)
             let size = CGSize(width: bounds.width / target, height: bounds.height / target)
             let rect = CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height)
-            zoom(to: rect, animated: true)
+            zoom(to: rect, animated: !UIAccessibility.isReduceMotionEnabled)
         }
     }
 }

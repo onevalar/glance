@@ -10,6 +10,7 @@ struct ContentView: View {
     private var logger
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var appState: AppState
 
     @State private var scale: CGSize = .init(width: 1, height: 1)
@@ -19,14 +20,16 @@ struct ContentView: View {
     @State private var isChromeVisible = true
     @State private var chromeTimer: Timer?
     @State private var isInfoPanelVisible = false
-    @State private var compareZoom: CGFloat = 1.0
-    @State private var comparePan: CGPoint = .zero
+    @StateObject private var compareSession = CompareSession()
+    @AppStorage("glance.autoHideControls") private var autoHideControls = true
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                if isNavBarVisible && appState.imageFiles.count > 1 {
+                if isNavBarVisible && appState.allImageFiles.count > 1 {
                     ThumbnailSidebar(windowHeight: window?.frame.size.height ?? 720)
+                        .allowsHitTesting(!appState.isCropEditing)
+                        .accessibilityHidden(appState.isCropEditing)
                         .zIndex(20)
                 }
 
@@ -36,6 +39,8 @@ struct ContentView: View {
                         windowHeight: window?.frame.size.height ?? 720,
                         onClose: { isInfoPanelVisible = false }
                     )
+                    .allowsHitTesting(!appState.isCropEditing)
+                    .accessibilityHidden(appState.isCropEditing)
                     .zIndex(20)
                     .position(x: geometry.size.width - 130, y: (window?.frame.size.height ?? 720) / 2)
                 }
@@ -43,18 +48,21 @@ struct ContentView: View {
                 Group {
                     if appState.selectedImageIndices.count > 1 {
                         ImageCompareView(
-                            sharedZoom: $compareZoom,
-                            sharedPan: $comparePan,
+                            session: compareSession,
                             onScaleChanged: { scale = CGSize(width: $0, height: $0) }
                         )
+                            .padding(.leading, isNavBarVisible && appState.allImageFiles.count > 1 ? 144 : 0)
+                            .padding(.trailing, isInfoPanelVisible ? 260 : 0)
                             .frame(width: geometry.size.width, height: geometry.size.height + 28)
                             .zIndex(10)
                     } else {
                         ImagePreviewView(scale: $scale, glanceImageView: $glanceImageView, onClick: toggleChrome, onDelete: confirmDelete, onNavigate: showChrome)
-                            .frame(width: geometry.size.width, height: geometry.size.height + 28)
+                            .frame(width: geometry.size.width, height: geometry.size.height + (appState.imageFiles.isEmpty ? 0 : 28))
                             .zIndex(10)
                     }
                 }
+                .allowsHitTesting(!appState.isCropEditing)
+                .accessibilityHidden(appState.isCropEditing)
 
                 // Left navigation arrow
                 if appState.selectedImageIndex > 0 && !appState.isCropEditing && appState.selectedImageIndices.count <= 1 {
@@ -63,7 +71,7 @@ struct ContentView: View {
                         action: { navigateToPrevious() }
                     )
                     .opacity(isChromeVisible ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.3), value: isChromeVisible)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: isChromeVisible)
                     .zIndex(20)
                     .position(x: (isNavBarVisible && appState.imageFiles.count > 1) ? 160 : 32,
                               y: geometry.size.height / 2)
@@ -76,18 +84,18 @@ struct ContentView: View {
                         action: { navigateToNext() }
                     )
                     .opacity(isChromeVisible ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.3), value: isChromeVisible)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: isChromeVisible)
                     .zIndex(20)
                     .position(x: geometry.size.width - 32, y: geometry.size.height / 2)
                 }
 
-                if !appState.isCropEditing {
+                if !appState.isCropEditing && !appState.imageFiles.isEmpty {
                     ToolBarView(scale: scale, onTap: { actionID in
                         handleToolbarTap(actionID)
                     }, onHoverEnter: cancelChromeTimer, onHoverExit: resetChromeTimer)
                     .opacity(isChromeVisible ? 1 : 0)
                     .allowsHitTesting(isChromeVisible)
-                    .animation(.easeInOut(duration: 0.3), value: isChromeVisible)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: isChromeVisible)
                     .zIndex(20)
                     .position(x: geometry.size.width / 2, y: geometry.size.height - 32)
                 }
@@ -97,14 +105,9 @@ struct ContentView: View {
                    let currentURL = appState.currentImageURL,
                    let image = NSImage(contentsOf: currentURL) {
                     CropOverlayView(
-                        imageSize: image.size,
-                        // Same box as the preview underneath (which is 28pt taller than the
-                        // GeometryReader), otherwise the frame and the picture drift apart.
-                        viewSize: CGSize(width: geometry.size.width, height: geometry.size.height + 28),
-                        cropRect: Binding(
-                            get: { MetadataManager.shared.getMetadata(for: currentURL).cropRect },
-                            set: { _ in }
-                        ),
+                        image: image,
+                        filename: currentURL.lastPathComponent,
+                        cropRect: MetadataManager.shared.getMetadata(for: currentURL).cropRect,
                         onCommit: { newRect in
                             MetadataManager.shared.updateMetadata(for: currentURL) { meta in
                                 meta.cropRect = newRect
@@ -116,12 +119,16 @@ struct ContentView: View {
                             appState.isCropEditing = false
                         }
                     )
+                    .id(currentURL)
                     .frame(width: geometry.size.width, height: geometry.size.height + 28)
                     .zIndex(30)
                 }
             }
-            .ignoresSafeArea(.container)
-            .background(colorScheme == .dark ? Color(white: 0.15) : Color(white: 0.9))
+            .ignoresSafeArea(.container, edges: appState.allImageFiles.isEmpty ? [] : .all)
+            .background(appState.allImageFiles.isEmpty ? GlancePalette.raised(colorScheme) : GlancePalette.canvas(colorScheme))
+            .onChange(of: autoHideControls) { _, enabled in
+                if enabled { resetChromeTimer() } else { showChrome() }
+            }
             .onAppear(perform: appearHandler)
             .onContinuousHover { phase in
                 switch phase {
@@ -165,14 +172,14 @@ struct ContentView: View {
 
         case .scaleMinis:
             if isComparing {
-                compareZoom = (compareZoom * 0.8).clamped(to: 0.1...16)
+                compareSession.zoom(by: 0.8)
             } else {
                 glanceImageView?.zoomOut()
             }
 
         case .scalePlus:
             if isComparing {
-                compareZoom = (compareZoom * 1.25).clamped(to: 0.1...16)
+                compareSession.zoom(by: 1.25)
             } else {
                 glanceImageView?.zoomIn()
             }
@@ -185,8 +192,7 @@ struct ContentView: View {
 
         case .centerFill:
             if isComparing {
-                compareZoom = 1.0
-                comparePan = .zero
+                compareSession.fit()
             } else {
                 glanceImageView?.fitToWindow()
             }
@@ -300,6 +306,7 @@ struct ContentView: View {
 
     func resetChromeTimer() {
         chromeTimer?.invalidate()
+        guard autoHideControls else { isChromeVisible = true; chromeTimer = nil; return }
         let timer = Timer(timeInterval: 5, repeats: false) { _ in
             DispatchQueue.main.async {
                 self.isChromeVisible = false

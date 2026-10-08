@@ -12,6 +12,7 @@ Glance is a macOS image viewer application built with SwiftUI, focused on effici
 - **iPhone / iPad app** (`Sources/GlanceiOS`) - photo-library culling (PhotoKit). Shares `Models/ImageMetadata.swift` and `Shared/AppLogger.swift` with the Mac app; ratings are stored under the photo's library identifier.
 - The Xcode project is **generated** from `project.yml` with XcodeGen (`xcodegen generate`); edit `project.yml`, not the `.xcodeproj`. Both apps share the bundle id `com.yourcompany.Glance` (placeholder, replace before distribution).
 - iOS simulator build: `xcodebuild -scheme GlanceiOS -destination "id=<simulator udid>" -derivedDataPath build-ios build`
+- iOS uses the shared `GlancePalette` converted from the custom Hero UI Linear tokens, with native menus, PhotoKit permission and 44-point minimum toolbar targets. Rating controls use neutral surfaces and one blue accent; thumbnails are accessible buttons. Photos fit between the controls, and the filmstrip hides at compact height so landscape photos remain unobscured. Zoom stays clipped to its viewport. Reduced Motion disables sidebar, chrome, filmstrip and double-tap zoom animations; Reduced Transparency replaces the bottom material with a solid canvas. iOS ratings stay local to the device's photo identifiers and are not synced with Mac file paths.
 
 ## Build and Run
 
@@ -29,14 +30,19 @@ Source lives in `Sources/Glance/`:
 - **AppState.swift** - Global `@MainActor` state: `allImageFiles` (whole folder), `imageFiles` (after the rating filter), selection, filter, crop mode, bookmark permissions
 - **ContentView.swift** - Main view: composes the layers below, owns toolbar actions, delete, rotate and the auto-hiding chrome
 - **Views/**:
-  - **ImagePreviewView.swift** - Single-image mode: loads the current image, arrow/Backspace key monitor, context menu
+  - **ImagePreviewView.swift** - Single-image mode: loads the current image, arrow/Backspace key monitor, context menu; empty filters provide a return-to-all action
+  - **WelcomeView.swift** - Paper-aligned startup page with a system toolbar, native importer, and the three most recent real locations. The File menu's ⌘O action also opens the importer while browsing or comparing photos.
   - **ZoomableImageView.swift** - `GlanceImageView` (custom `NSView` that draws, zooms and pans the image) + SwiftUI bridge
-  - **ImageCompareView.swift** - Multi-selection grid with synced zoom/pan
-  - **CropOverlayView.swift** - Non-destructive crop frame (only stores a normalized rect)
+  - **ImageCompareView.swift** - Multi-selection grid with native synchronized zoom toggle, exit action, a focused photo and per-photo ratings. Unlinking keeps current framing; toolbar zoom/fit acts on the focused photo, and relinking adopts that photo's transform.
+  - **CropOverlayView.swift** - Non-destructive editor with a native top action bar and ratio inspector. It renders the original image inside its own measured canvas; only Done writes the normalized draft to metadata. Cancel discards the draft, including Reset. Corners, edges and moving the rectangle use a fixed canvas coordinate space and gesture-start snapshot.
   - **ThumbnailSidebar.swift / ImageThumbnailView.swift** - Left sidebar with rating filter, bulk "move discarded to Trash" and thumbnails
   - **ToolbarView.swift** - Bottom toolbar; the struct is named `ToolBarView` (file name differs, keep it)
   - **ImageInfoPanel.swift** - Right-hand info panel (name, pixels, size, date)
 - **Models/ImageMetadata.swift** - `ImageMetadata` (rating status + crop rect) and `MetadataManager`, persisted to `~/Library/Application Support/Glance/metadata.json` keyed by file path
+- **Models/RecentLocationStore.swift** - Local-only recent history in app preferences: last-opened date, observed image count and a bookmark for an already selected resource. Deduplicates and retains six locations; the startup page shows three. Reopening still checks read access, and missing/unresolvable files require selection again. `AppState` retains the active resource's security scope across single/compare view replacement and releases it when replaced or the app terminates.
+- **Models/BrowsingSessionStore.swift** - Local resource bookmark and last selected photo; startup preference defaults to the welcome page. Opting into restore reopens silently through existing read-access checks. Missing files and unavailable permissions fall back to the welcome page; Finder/CLI opens take precedence. No automatic permission prompts or expanded permissions.
+- **Models/CompareSession.swift** - Relative zoom/pan, focused photo, linked and individual transforms. Keeps normalized framing across differently sized photos and resets when the compare selection changes.
+- **Models/CropSession.swift** - Crop draft in normalized original-image coordinates. Resizing the window only changes its display projection, retaining the draft and aspect selection; boundary handling preserves locked ratios and the opposite corner. Geometry has no file writes.
 - **Settings/** - Settings window (General / About)
 - **Shared/**:
   - **AppLogger.swift** - `@AppLog` property wrapper for logging
@@ -98,7 +104,7 @@ ContentView (GeometryReader + ZStack)
 ├── ToolBarView (bottom, floating, auto-hides after 5s)
 └── CropOverlayView (only while cropping)
 ```
-The preview and crop overlay are both sized `geometry.height + 28`; keep them identical or the crop frame drifts off the picture.
+The browsing preview includes the hidden-title-bar height (`geometry.height + 28`). The crop editor has its own image canvas below the action bar and beside the inspector; both its image and handles use that canvas's measured size. Do not project crop handles using the whole window size.
 
 ### Things to remember
 - Views talk through `NotificationCenter` names `"open-image"` (reload the current image) and `"metadata-updated"`.

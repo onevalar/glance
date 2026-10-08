@@ -85,10 +85,10 @@ struct ImageInfoPanel: View {
             }
         }
         .frame(width: 260, height: windowHeight)
-        .background(colorScheme == .dark ? Color(white: 0.15) : Color(white: 0.9))
+        .background(GlancePalette.panel(colorScheme))
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(colorScheme == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.3))
+                .fill(GlancePalette.border(colorScheme))
                 .frame(width: 1)
         }
     }

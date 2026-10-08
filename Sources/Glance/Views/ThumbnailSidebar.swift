@@ -58,7 +58,7 @@ struct ThumbnailSidebar: View {
             }
             .padding([.leading, .trailing], 12)
             .padding([.top, .bottom], 10)
-            .background(colorScheme == .dark ? Color(white: 0.12) : Color(white: 0.85))
+            .background(GlancePalette.panel(colorScheme))
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.1))
@@ -78,6 +78,13 @@ struct ThumbnailSidebar: View {
                             .onTapGesture {
                                 handleTap(at: index)
                             }
+                            .contextMenu {
+                                Button(appState.selectedImageIndices.count > 1 && appState.selectedImageIndices.contains(index) ? "移出比较" : "加入比较") {
+                                    appState.toggleImageSelection(index: index)
+                                    NotificationCenter.default.post(name: Notification.Name("open-image"), object: nil)
+                                }
+                            }
+                            .accessibilityLabel(imageURL.lastPathComponent)
                         }
                     }
                 }
@@ -90,10 +97,10 @@ struct ThumbnailSidebar: View {
         }
         .padding([.top], 24)
         .frame(width: 144, height: windowHeight)
-        .background(colorScheme == .dark ? Color(white: 0.15) : Color(white: 0.9))
+        .background(GlancePalette.panel(colorScheme))
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(colorScheme == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.3))
+                .fill(GlancePalette.border(colorScheme))
                 .frame(width: 1)
         }
         .alert("清空丢弃的照片", isPresented: $showingBulkClearAlert) {

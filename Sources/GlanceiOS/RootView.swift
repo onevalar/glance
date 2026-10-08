@@ -50,6 +50,7 @@ struct AccessDeniedView: View {
 /// iPhone (compact width): the photo fills the screen, filmstrip sits above the rating buttons.
 struct MainView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showColumn = true
 
     var body: some View {
@@ -63,7 +64,7 @@ struct MainView: View {
                 }
                 ViewerScreen(showColumn: $showColumn)
             }
-            .animation(.easeInOut(duration: 0.25), value: showColumn)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showColumn)
         } else {
             ViewerScreen(showColumn: $showColumn)
         }
@@ -72,16 +73,21 @@ struct MainView: View {
 
 struct SidebarColumn: View {
     @EnvironmentObject private var store: LibraryStore
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ThumbnailStrip(axis: .vertical)
-            .background(Color(.secondarySystemBackground))
+            .background(GlancePalette.panel(scheme))
     }
 }
 
 struct ViewerScreen: View {
     @EnvironmentObject private var store: LibraryStore
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.verticalSizeClass) private var heightClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Binding var showColumn: Bool
 
     @State private var chromeVisible = true
@@ -91,22 +97,24 @@ struct ViewerScreen: View {
 
     var body: some View {
         ZStack {
-            Color(.secondarySystemBackground).ignoresSafeArea()
-
-            if store.visible.isEmpty {
-                EmptyFilterView()
-            } else {
-                ViewerPager(onSingleTap: { withAnimation(.easeInOut(duration: 0.2)) { chromeVisible.toggle() } })
-                    .ignoresSafeArea()
-            }
+            GlancePalette.canvas(scheme).ignoresSafeArea()
 
             VStack(spacing: 0) {
                 topBar
-                Spacer()
+                    .opacity(chromeVisible || store.visible.isEmpty ? 1 : 0)
+                    .allowsHitTesting(chromeVisible || store.visible.isEmpty)
+                if store.visible.isEmpty {
+                    EmptyFilterView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ViewerPager(onSingleTap: {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { chromeVisible.toggle() }
+                    })
+                }
                 bottomBar
+                    .opacity(chromeVisible || store.visible.isEmpty ? 1 : 0)
+                    .allowsHitTesting(chromeVisible || store.visible.isEmpty)
             }
-            .opacity(chromeVisible || store.visible.isEmpty ? 1 : 0)
-            .allowsHitTesting(chromeVisible || store.visible.isEmpty)
         }
         .background { arrowKeys }
         .confirmationDialog(
@@ -136,10 +144,11 @@ struct ViewerScreen: View {
                     showColumn.toggle()
                 } label: {
                     Image(systemName: "sidebar.leading")
-                        .frame(width: 40, height: 40)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
-                .background(.ultraThinMaterial, in: .circle)
+                .background(GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
+                .accessibilityLabel("显示或隐藏缩略图")
             }
 
             filterMenu
@@ -155,26 +164,29 @@ struct ViewerScreen: View {
         .padding(.horizontal, 14)
         .padding(.top, 6)
         .padding(.bottom, 8)
+        .background(GlancePalette.canvas(scheme))
     }
 
     private var filterMenu: some View {
         Menu {
             Picker("筛选", selection: $store.filter) {
                 ForEach(PhotoFilter.allCases) { filter in
-                    Label(filter.rawValue, systemImage: filter.iconName).tag(filter)
+                    Label(filter == .undecided ? "待定" : filter.rawValue, systemImage: filter.iconName).tag(filter)
                 }
             }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: store.filter.iconName)
-                Text(store.filter.rawValue)
+                Text(store.filter == .undecided ? "待定" : store.filter.rawValue)
             }
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 12)
-            .frame(height: 40)
-            .background(.ultraThinMaterial, in: .capsule)
+            .frame(minHeight: 44)
+            .background(GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
         }
         .tint(.primary)
+        .accessibilityLabel("筛选照片")
+        .accessibilityValue(store.filter == .undecided ? "待定" : store.filter.rawValue)
     }
 
     private var positionLabel: some View {
@@ -210,15 +222,16 @@ struct ViewerScreen: View {
             .disabled(store.discardedAssets.isEmpty)
         } label: {
             Image(systemName: "ellipsis")
-                .frame(width: 40, height: 40)
-                .background(.ultraThinMaterial, in: .circle)
+                .frame(width: 44, height: 44)
+                .background(GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
         }
         .tint(.primary)
+        .accessibilityLabel("更多照片操作")
     }
 
     private var bottomBar: some View {
         VStack(spacing: 10) {
-            if sizeClass != .regular, !store.visible.isEmpty {
+            if sizeClass != .regular, heightClass != .compact, !store.visible.isEmpty {
                 ThumbnailStrip(axis: .horizontal)
                     .frame(height: 72)
             }
@@ -227,7 +240,10 @@ struct ViewerScreen: View {
         }
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .background(.ultraThinMaterial)
+        .background {
+            if reduceTransparency { GlancePalette.canvas(scheme) }
+            else { Rectangle().fill(.ultraThinMaterial) }
+        }
     }
 
     /// Arrow keys on an iPad keyboard.

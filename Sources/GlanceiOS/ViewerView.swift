@@ -32,6 +32,7 @@ struct PhotoPage: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
             .task(id: asset.localIdentifier) {
                 loadedOriginal = false
                 let target = CGSize(
@@ -80,6 +81,17 @@ struct ViewerPager: View {
         .scrollIndicators(.hidden)
         // While zoomed in, dragging pans the photo instead of turning the page.
         .scrollDisabled(isZoomed)
+        .clipped()
         .onChange(of: store.currentID) { _, _ in isZoomed = false }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("当前照片")
+        .accessibilityValue("\((store.currentIndex ?? 0) + 1) / \(store.visible.count)")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: store.next()
+            case .decrement: store.previous()
+            @unknown default: break
+            }
+        }
     }
 }

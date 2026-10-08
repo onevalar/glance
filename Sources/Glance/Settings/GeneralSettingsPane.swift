@@ -17,6 +17,9 @@ struct GeneralSettingsPane: View {
 
     @AppStorage("showCurDirImg")
     private var showCurDirImg = true
+    @AppStorage("glance.appearance") private var appearance = GlanceAppearance.system.rawValue
+    @AppStorage("glance.autoHideControls") private var autoHideControls = true
+    @AppStorage("glance.startup") private var startup = GlanceStartup.welcome.rawValue
 
     private var permissionDirs: [PermissionDir] {
         appState.dirs.map { PermissionDir(url: $0) }
@@ -24,6 +27,27 @@ struct GeneralSettingsPane: View {
 
     var body: some View {
         Form {
+            Section("外观") {
+                Picker("界面外观", selection: $appearance) {
+                    ForEach(GlanceAppearance.allCases) { option in
+                        Text(option.title).tag(option.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("图片画布、缩略图、工具栏和信息面板会一起切换。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("专注浏览") {
+                Picker("启动时", selection: $startup) {
+                    Text("显示启动页").tag(GlanceStartup.welcome.rawValue)
+                    Text("恢复上次浏览").tag(GlanceStartup.resume.rawValue)
+                }
+                Text("恢复已打开的位置和最后选中的照片。文件移动或无法读取时显示启动页。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("闲置时自动隐藏工具栏", isOn: $autoHideControls)
+                Text("移动到窗口底部可唤回工具栏；点击照片可随时显示或隐藏。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             imageBrowsingSection
         }
         .formStyle(.grouped)
@@ -64,7 +88,8 @@ struct GeneralSettingsPane: View {
                         ForEach(Array(permissionDirs.enumerated()), id: \.element.path) { index, dir in
                             HStack {
                                 Text(dir.path)
-                                    .font(.title3)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .lineLimit(2)
                                 Spacer()
                                 Button(action: {
                                     appState.dirs.remove(at: index)
@@ -72,6 +97,7 @@ struct GeneralSettingsPane: View {
                                 }) {
                                     Image(systemName: "delete.left")
                                 }
+                                .accessibilityLabel(Text("移除授权文件夹"))
                             }
                             .buttonStyle(.borderless)
                         }
@@ -89,8 +115,10 @@ struct GeneralSettingsPane: View {
                 if let dir = dirs.first {
                     let gotAccess = dir.startAccessingSecurityScopedResource()
                     if gotAccess {
-                        appState.dirs.append(dir)
-                        appState.storeBookmarkData()
+                        if !appState.dirs.contains(dir) {
+                            appState.dirs.append(dir)
+                            appState.storeBookmarkData()
+                        }
                     } else {
                         logger.warning("Failed to access directory: \(dir.path)")
                     }

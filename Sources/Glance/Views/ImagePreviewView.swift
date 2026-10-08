@@ -5,7 +5,6 @@
 
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 @MainActor
 struct ImagePreviewView: View {
@@ -22,8 +21,10 @@ struct ImagePreviewView: View {
     var onNavigate: (() -> Void)?
 
     @State private var currentImage: NSImage?
-    @State private var showFileImporter = false
     @State private var keyMonitor: Any?
+    @State private var isDropTargeted = false
+    @State private var openError: String?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
@@ -51,29 +52,33 @@ struct ImagePreviewView: View {
                         NSPasteboard.general.writeObjects([currentImage])
                     }
                 }
+            } else if !appState.allImageFiles.isEmpty && appState.activeFilter != .all {
+                ContentUnavailableView {
+                    Label("这个筛选下没有照片", systemImage: "line.3.horizontal.decrease.circle")
+                } actions: {
+                    Button("查看全部") {
+                        appState.activeFilter = .all
+                        appState.updateFilteredImages(preserveSelection: false)
+                        refreshImage()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             } else {
-                Button("选择图片或文件夹") {
-                    showFileImporter = true
+                WelcomeView(recents: appState.recentLocations, onChoose: { appState.appDelegate?.chooseImages() }) { entry in
+                    do { open(try appState.recentLocations.resolve(entry)) }
+                    catch { openError = String(localized: "这个最近记录无法打开，请重新选择图片或文件夹。") }
                 }
-                .buttonStyle(.borderedProminent)
+                .overlay { if isDropTargeted { GlancePalette.accent.opacity(0.06).allowsHitTesting(false) } }
             }
         }
-        .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.image, .folder]
-        ) { result in
-            if case .success(let url) = result {
-                let gotAccess = url.startAccessingSecurityScopedResource()
-                if !gotAccess {
-                    logger.warning("Failed to access security-scoped resource")
-                    return
-                }
-                if let delegate = appState.appDelegate {
-                    delegate.loadImages(from: url)
-                    refreshImage()
-                }
-            }
-        }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first, url.isFileURL else { return false }
+            open(url)
+            return true
+        } isTargeted: { isDropTargeted = $0 }
+        .alert("无法打开图片", isPresented: Binding(get: { openError != nil }, set: { if !$0 { openError = nil } })) {
+            Button("确定", role: .cancel) { openError = nil }
+        } message: { Text(openError ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("open-image"))) { _ in
             refreshImage()
         }
@@ -84,6 +89,16 @@ struct ImagePreviewView: View {
         .onDisappear {
             removeKeyEvents()
         }
+    }
+
+    private func open(_ url: URL) {
+        guard appState.acquireReadAccess(to: url) else {
+            openError = String(localized: "无法读取这个位置，请通过选择器重新授权。")
+            logger.warning("Failed to access selected resource")
+            return
+        }
+        appState.appDelegate?.loadImages(from: url)
+        refreshImage()
     }
 
     func setupKeyEvents() {
@@ -130,9 +145,7 @@ struct ImagePreviewView: View {
             return
         }
         let url = appState.imageFiles[appState.selectedImageIndex]
-        if let image = NSImage(contentsOf: url) {
-            currentImage = image
-        }
+        currentImage = NSImage(contentsOf: url)
     }
 
     private func showNextImage() {
