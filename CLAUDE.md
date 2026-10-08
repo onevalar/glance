@@ -10,7 +10,7 @@ Glance is a macOS image viewer application built with SwiftUI, focused on effici
 
 - **macOS app** (`Sources/Glance`) - the full product.
 - **iPhone / iPad app** (`Sources/GlanceiOS`) - photo-library culling (PhotoKit). Shares `Models/ImageMetadata.swift` and `Shared/AppLogger.swift` with the Mac app; ratings are stored under the photo's library identifier.
-- The Xcode project is **generated** from `project.yml` with XcodeGen (`xcodegen generate`); edit `project.yml`, not the `.xcodeproj`. Both apps share the bundle id `com.yujiaan.glance` and are signed with team `H4982D35ZR` (automatic signing).
+- The Xcode project is **generated** from `project.yml` with XcodeGen (`xcodegen generate`); edit `project.yml`, not the `.xcodeproj`. Both apps share the bundle id `com.anvalar.Glance` and are signed with team `H4982D35ZR` (automatic signing).
 - iOS simulator build: `xcodebuild -scheme GlanceiOS -destination "id=<simulator udid>" -derivedDataPath build-ios build`
 - iOS uses the shared `GlancePalette` converted from the custom Hero UI Linear tokens, with native menus, PhotoKit permission and 44-point minimum toolbar targets. Rating controls use neutral surfaces and one blue accent; thumbnails are accessible buttons. Photos fit between the controls, and the filmstrip hides at compact height so landscape photos remain unobscured. Zoom stays clipped to its viewport. Reduced Motion disables sidebar, chrome, filmstrip and double-tap zoom animations; Reduced Transparency replaces the bottom material with a solid canvas. iOS ratings stay local to the device's photo identifiers and are not synced with Mac file paths.
 

@@ -495,7 +495,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yujiaan.glance;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvalar.Glance;
 				PRODUCT_NAME = Glance;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -515,7 +515,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yujiaan.glance;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvalar.Glance;
 				PRODUCT_NAME = Glance;
 				SDKROOT = macosx;
 			};
@@ -531,7 +531,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yujiaan.glance.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvalar.Glance.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Glance.app/Contents/MacOS/Glance";
 			};
@@ -547,7 +547,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yujiaan.glance.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvalar.Glance.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Glance.app/Contents/MacOS/Glance";
 			};
@@ -565,7 +565,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yujiaan.glance;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvalar.Glance;
 				PRODUCT_NAME = Glance;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -646,7 +646,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yujiaan.glance;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvalar.Glance;
 				PRODUCT_NAME = Glance;
 				SDKROOT = macosx;
 			};
