@@ -1,6 +1,6 @@
 name: Glance
 options:
-  bundleIdPrefix: com.yourcompany
+  bundleIdPrefix: com.yujiaan
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -9,6 +9,8 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
+    DEVELOPMENT_TEAM: H4982D35ZR
+    CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
@@ -23,13 +25,11 @@ targets:
           - Glance.entitlements
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.Glance
+        PRODUCT_BUNDLE_IDENTIFIER: com.yujiaan.glance
         PRODUCT_NAME: Glance
         INFOPLIST_FILE: Sources/Glance/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/Glance/Glance.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Local test builds are signed ad hoc; set DEVELOPMENT_TEAM in Xcode for distribution.
-        CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: YES
   GlanceTests:
     type: bundle.unit-test
@@ -40,10 +40,9 @@ targets:
       - target: Glance
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.GlanceTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.yujiaan.glance.tests
         BUNDLE_LOADER: $(TEST_HOST)
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Glance.app/Contents/MacOS/Glance
-        CODE_SIGN_IDENTITY: "-"
   GlanceiOS:
     type: application
     platform: iOS
@@ -75,7 +74,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.Glance
+        PRODUCT_BUNDLE_IDENTIFIER: com.yujiaan.glance
         PRODUCT_NAME: Glance
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
