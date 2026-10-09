@@ -64,6 +64,7 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
     // MARK: - Permission & loading
 
     func start() async {
+        if UserDefaults.standard.bool(forKey: "resetRatings") { metadata.removeAllMetadata() }
         let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         if current == .notDetermined {
             _ = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
@@ -202,9 +203,23 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
 
     // MARK: - Rating
 
+    /// What the last rating changed, so it can be undone from the toast.
+    struct RatingEvent: Equatable, Identifiable {
+        let id = UUID()
+        let assetID: String
+        let previous: ImageStatus
+        let new: ImageStatus
+    }
+
+    @Published private(set) var lastRating: RatingEvent?
+
+    /// Rates the current photo. Choosing the status it already has clears it back to 待定,
+    /// so a wrong swipe is fixed by swiping the same way again.
     func rate(_ status: ImageStatus, advance: Bool) {
         guard let asset = currentAsset, let index = currentIndex else { return }
-        metadata.updateMetadata(forKey: asset.localIdentifier) { $0.status = status }
+        let previous = self.status(of: asset)
+        let result: ImageStatus = previous == status ? .undecided : status
+        apply(result, to: asset.localIdentifier, previous: previous)
 
         if filter != .all {
             // The photo may have left the filtered list; the next one takes its place.
@@ -213,6 +228,44 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
             next()
         }
         objectWillChange.send()
+    }
+
+    /// Sets a specific photo's rating without moving the selection (used by the comparison screen).
+    func setStatus(_ status: ImageStatus, forAssetID id: String) {
+        let previous = metadata.getMetadata(forKey: id).status
+        let result: ImageStatus = previous == status ? .undecided : status
+        apply(result, to: id, previous: previous)
+        objectWillChange.send()
+    }
+
+    private func apply(_ status: ImageStatus, to id: String, previous: ImageStatus) {
+        metadata.updateMetadata(forKey: id) { $0.status = status }
+        lastRating = RatingEvent(assetID: id, previous: previous, new: status)
+    }
+
+    func undoLastRating() {
+        guard let event = lastRating else { return }
+        metadata.updateMetadata(forKey: event.assetID) { $0.status = event.previous }
+        lastRating = nil
+        // Bring the photo back into view, even if the active filter had hidden it.
+        let index = currentIndex
+        rebuild(preferIndex: index)
+        if visible.contains(where: { $0.localIdentifier == event.assetID }) { currentID = event.assetID }
+        objectWillChange.send()
+    }
+
+    /// Number of photos in the current album with the given rating (all photos for `.all`).
+    func count(_ filter: PhotoFilter) -> Int {
+        switch filter {
+        case .all: return allAssets.count
+        case .keep: return allAssets.reduce(0) { $0 + (status(of: $1) == .keep ? 1 : 0) }
+        case .undecided: return allAssets.reduce(0) { $0 + (status(of: $1) == .undecided ? 1 : 0) }
+        case .discard: return allAssets.reduce(0) { $0 + (status(of: $1) == .discard ? 1 : 0) }
+        }
+    }
+
+    func asset(withID id: String) -> PHAsset? {
+        allAssets.first { $0.localIdentifier == id }
     }
 
     // MARK: - Deleting

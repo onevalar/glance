@@ -6,11 +6,15 @@
 import Photos
 import SwiftUI
 
-/// One page of the pager: shows the photo fitted to the screen and loads the original once the user zooms in.
+/// One photo: fitted to the available space, sharper original loaded once the user zooms in.
 struct PhotoPage: View {
     let asset: PHAsset
-    var onZoomChange: (Bool) -> Void
-    var onSingleTap: () -> Void
+    var ratingGesturesEnabled = true
+    var syncHub: CompareSyncHub?
+    var onZoomChange: (Bool) -> Void = { _ in }
+    var onSingleTap: () -> Void = {}
+    var onVerticalProgress: (CGFloat) -> Void = { _ in }
+    var onVerticalCommit: (Int) -> Void = { _ in }
 
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
@@ -23,16 +27,20 @@ struct PhotoPage: View {
                     ZoomableImage(
                         image: image,
                         pixelSize: CGSize(width: asset.pixelWidth, height: asset.pixelHeight),
+                        ratingGesturesEnabled: ratingGesturesEnabled,
+                        syncHub: syncHub,
+                        syncID: asset.localIdentifier,
                         onZoomChange: onZoomChange,
                         onSingleTap: onSingleTap,
-                        onZoomedIn: { Task { await loadOriginal() } }
+                        onZoomedIn: { Task { await loadOriginal() } },
+                        onVerticalProgress: onVerticalProgress,
+                        onVerticalCommit: onVerticalCommit
                     )
                 } else {
                     ProgressView()
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
-            .clipped()
             .task(id: asset.localIdentifier) {
                 loadedOriginal = false
                 let target = CGSize(
@@ -53,11 +61,16 @@ struct PhotoPage: View {
     }
 }
 
-/// Horizontal paging through the visible photos.
+/// Horizontal paging through the visible photos, edge to edge.
 struct ViewerPager: View {
     @EnvironmentObject private var store: LibraryStore
     @State private var isZoomed = false
+
     var onSingleTap: () -> Void
+    /// -1 … +1 while a photo is being dragged down / up.
+    var onVerticalProgress: (CGFloat) -> Void
+    /// +1 = swiped up (keep), -1 = swiped down (discard).
+    var onVerticalCommit: (Int) -> Void
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -68,7 +81,13 @@ struct ViewerPager: View {
                         onZoomChange: { zoomed in
                             if asset.localIdentifier == store.currentID { isZoomed = zoomed }
                         },
-                        onSingleTap: onSingleTap
+                        onSingleTap: onSingleTap,
+                        onVerticalProgress: { progress in
+                            if asset.localIdentifier == store.currentID { onVerticalProgress(progress) }
+                        },
+                        onVerticalCommit: { direction in
+                            if asset.localIdentifier == store.currentID { onVerticalCommit(direction) }
+                        }
                     )
                     .containerRelativeFrame(.horizontal)
                     .id(asset.localIdentifier)
@@ -81,17 +100,7 @@ struct ViewerPager: View {
         .scrollIndicators(.hidden)
         // While zoomed in, dragging pans the photo instead of turning the page.
         .scrollDisabled(isZoomed)
-        .clipped()
         .onChange(of: store.currentID) { _, _ in isZoomed = false }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("当前照片")
-        .accessibilityValue("\((store.currentIndex ?? 0) + 1) / \(store.visible.count)")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: store.next()
-            case .decrement: store.previous()
-            @unknown default: break
-            }
-        }
+        .accessibilityIdentifier("viewer.pager")
     }
 }

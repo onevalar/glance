@@ -133,6 +133,12 @@ public class MetadataManager: ObservableObject {
         saveMetadata()
     }
 
+    /// Forgets every rating and crop (used by UI tests to start from a clean slate).
+    public func removeAllMetadata() {
+        metadataCache.removeAll()
+        saveMetadata()
+    }
+
     public func removeMetadata(forKey key: String) {
         guard metadataCache.removeValue(forKey: key) != nil else { return }
         saveMetadata()

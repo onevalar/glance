@@ -6,8 +6,31 @@
 import SwiftUI
 import UIKit
 
+/// Keeps several zooming photos aligned on the same spot (comparison screen).
+/// Views register themselves; a change in one is applied directly to the others.
+final class CompareSyncHub {
+    private struct Entry { weak var view: ZoomingScrollView?; let id: String }
+    private var entries: [Entry] = []
+    var isEnabled = true
+
+    func register(_ view: ZoomingScrollView, id: String) {
+        entries.removeAll { $0.view == nil || $0.id == id }
+        entries.append(Entry(view: view, id: id))
+    }
+
+    func broadcast(from id: String, zoom: CGFloat, center: CGPoint) {
+        guard isEnabled else { return }
+        for entry in entries where entry.id != id {
+            entry.view?.applySync(zoom: zoom, center: center)
+        }
+    }
+}
+
 /// Pinch to zoom, drag to pan, double-tap to toggle zoom. Built on `UIScrollView`,
 /// which gives the native feel (inertia, rubber-banding) that a SwiftUI gesture can't match.
+///
+/// While the photo is fitted (not zoomed), dragging it up or down is a rating gesture:
+/// the photo follows the finger with a rubber band and a release past the threshold commits.
 final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     let imageView = UIImageView()
     var pixelSize: CGSize = .zero { didSet { if oldValue != pixelSize { needsFit = true } } }
@@ -15,21 +38,36 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     var onSingleTap: (() -> Void)?
     var onZoomedIn: (() -> Void)?
 
+    /// Rating by vertical swipe. `progress` runs from -1 (dragged down) to +1 (dragged up).
+    var ratingGesturesEnabled = true
+    var onVerticalProgress: ((CGFloat) -> Void)?
+    var onVerticalCommit: ((Int) -> Void)?
+
+    var syncHub: CompareSyncHub? { didSet { syncHub?.register(self, id: syncID) } }
+    var syncID = ""
+
+    private static let commitDistance: CGFloat = 80
+    private static let progressDistance: CGFloat = 120
+
     private var needsFit = true
     private var lastBoundsSize: CGSize = .zero
     private var didReportZoomedIn = false
+    private var applyingSync = false
+
+    private var isFitted: Bool { zoomScale <= 1.01 }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         delegate = self
-        clipsToBounds = true
         showsHorizontalScrollIndicator = false
         showsVerticalScrollIndicator = false
         contentInsetAdjustmentBehavior = .never
         bouncesZoom = true
         decelerationRate = .fast
-        // At fit, horizontal drags belong to the outer photo pager. Keep pinch zoom enabled.
-        panGestureRecognizer.isEnabled = false
+        // Vertical rubber band is the rating gesture; horizontal drags fall through to the pager.
+        alwaysBounceVertical = true
+        alwaysBounceHorizontal = false
+        isDirectionalLockEnabled = true
 
         imageView.contentMode = .scaleAspectFit
         addSubview(imageView)
@@ -73,7 +111,6 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         minimumZoomScale = 1
         maximumZoomScale = min(max(actualPixels, 4), 20)
         didReportZoomedIn = false
-        panGestureRecognizer.isEnabled = false
         onZoomChange?(false)
     }
 
@@ -90,13 +127,67 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerImage()
-        let isZoomed = zoomScale > 1.01
-        panGestureRecognizer.isEnabled = isZoomed
-        onZoomChange?(isZoomed)
+        onZoomChange?(zoomScale > 1.01)
         if zoomScale > 1.3, !didReportZoomedIn {
             didReportZoomedIn = true
             onZoomedIn?()
         }
+        broadcastTransform()
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if ratingGesturesEnabled, isFitted, isDragging || isDecelerating {
+            let progress = (contentOffset.y / Self.progressDistance).clamped(to: -1...1)
+            onVerticalProgress?(progress)
+        }
+        broadcastTransform()
+    }
+
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
+                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        guard ratingGesturesEnabled, isFitted else { return }
+        let offset = contentOffset.y
+        let flickedUp = velocity.y > 0.9 && offset > 20
+        let flickedDown = velocity.y < -0.9 && offset < -20
+        if offset > Self.commitDistance || flickedUp {
+            onVerticalCommit?(1)
+        } else if offset < -Self.commitDistance || flickedDown {
+            onVerticalCommit?(-1)
+        }
+        onVerticalProgress?(0)
+    }
+
+    // MARK: - Comparison sync
+
+    private func currentCenterFraction() -> CGPoint {
+        let frame = imageView.frame
+        guard frame.width > 0, frame.height > 0 else { return CGPoint(x: 0.5, y: 0.5) }
+        return CGPoint(
+            x: (contentOffset.x + bounds.width / 2 - frame.minX) / frame.width,
+            y: (contentOffset.y + bounds.height / 2 - frame.minY) / frame.height
+        )
+    }
+
+    private func broadcastTransform() {
+        guard !applyingSync, let syncHub else { return }
+        syncHub.broadcast(from: syncID, zoom: zoomScale, center: currentCenterFraction())
+    }
+
+    /// Follows another photo's zoom and focus point without echoing it back.
+    func applySync(zoom: CGFloat, center: CGPoint) {
+        applyingSync = true
+        defer { applyingSync = false }
+        let target = zoom.clamped(to: minimumZoomScale...maximumZoomScale)
+        if abs(zoomScale - target) > 0.001 { setZoomScale(target, animated: false) }
+        centerImage()
+        let frame = imageView.frame
+        var offset = CGPoint(
+            x: frame.minX + center.x * frame.width - bounds.width / 2,
+            y: frame.minY + center.y * frame.height - bounds.height / 2
+        )
+        offset.x = contentSize.width <= bounds.width ? 0 : offset.x.clamped(to: 0...(contentSize.width - bounds.width))
+        offset.y = contentSize.height <= bounds.height ? 0 : offset.y.clamped(to: 0...(contentSize.height - bounds.height))
+        setContentOffset(offset, animated: false)
     }
 
     // MARK: - Gestures
@@ -107,14 +198,20 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
         if zoomScale > 1.01 {
-            setZoomScale(1, animated: !UIAccessibility.isReduceMotionEnabled)
+            setZoomScale(1, animated: true)
         } else {
             let target = min(3, maximumZoomScale)
             let point = gesture.location(in: imageView)
             let size = CGSize(width: bounds.width / target, height: bounds.height / target)
             let rect = CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height)
-            zoom(to: rect, animated: !UIAccessibility.isReduceMotionEnabled)
+            zoom(to: rect, animated: true)
         }
+    }
+}
+
+private extension CGFloat {
+    func clamped(to range: ClosedRange<CGFloat>) -> CGFloat {
+        Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
     }
 }
 
@@ -122,18 +219,29 @@ struct ZoomableImage: UIViewRepresentable {
     let image: UIImage
     /// Pixel size of the original; the layout is based on it so a sharper image can be swapped in later.
     let pixelSize: CGSize
+    var ratingGesturesEnabled = true
+    var syncHub: CompareSyncHub?
+    var syncID = ""
     var onZoomChange: (Bool) -> Void
     var onSingleTap: () -> Void
     var onZoomedIn: () -> Void
+    var onVerticalProgress: (CGFloat) -> Void = { _ in }
+    var onVerticalCommit: (Int) -> Void = { _ in }
 
     func makeUIView(context: Context) -> ZoomingScrollView {
-        ZoomingScrollView()
+        let view = ZoomingScrollView()
+        view.syncID = syncID
+        view.syncHub = syncHub
+        return view
     }
 
     func updateUIView(_ view: ZoomingScrollView, context: Context) {
         view.onZoomChange = onZoomChange
         view.onSingleTap = onSingleTap
         view.onZoomedIn = onZoomedIn
+        view.onVerticalProgress = onVerticalProgress
+        view.onVerticalCommit = onVerticalCommit
+        view.ratingGesturesEnabled = ratingGesturesEnabled
         view.pixelSize = pixelSize
         if view.imageView.image !== image {
             view.imageView.image = image

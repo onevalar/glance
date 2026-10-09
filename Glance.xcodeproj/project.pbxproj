@@ -24,15 +24,14 @@
 		42C10AC32FCBF42D1B631C29 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5CBB1DC136F4AD73C629F084 /* Localizable.xcstrings */; };
 		44EA53C748970BDC3DDBBF8E /* ViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CD1BAFE7871F4361C512921 /* ViewerView.swift */; };
 		4647F582C17C1D678C923513 /* ImageRotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */; };
-		4B812F92D64984FD2D762E12 /* RatingBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23618E3A65E5CA7F0930D837 /* RatingBar.swift */; };
 		4D132A76C356841D92A3278D /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6136D7398BDC5BA16D4B9257 /* AppLogger.swift */; };
 		4DE224636186670089A82C72 /* RecentLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D600187CF1C1F4670BA6B7A8 /* RecentLocationTests.swift */; };
 		4F15B3C04AF000FE487D2B32 /* PhotoImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1691AE19E06BB4AEF5B17F6 /* PhotoImageLoader.swift */; };
-		5139690AE7DCB3FBAAFE56C4 /* ThumbnailViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B57F63B7B132870EC988DDD /* ThumbnailViews.swift */; };
 		51C5607A78ABAFDD018A2916 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136F0AEA271E04C30969FE74 /* ContentView.swift */; };
 		547C0071596C2C0A2C56C639 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F5D573B1ABE72ED5A9AAF260 /* Assets.xcassets */; };
 		5FD5D2CB31026E6F804D2EA1 /* NavigationIdentifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F17A562555BFE62BB6B17FA /* NavigationIdentifier.swift */; };
 		605C2D8D599668AB26E228C5 /* GlanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3B5673204724AF162823D7 /* GlanceApp.swift */; };
+		6135DC826AB60DB4E2573061 /* GestureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEFBBB5B4B0C4B08F2C8CAE /* GestureTests.swift */; };
 		71F205D6CF781C5BA848F6B4 /* ImageMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */; };
 		7648965817C96893C52B95D4 /* BrowsingSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D076362BB14692174F2823 /* BrowsingSessionTests.swift */; };
 		76EFB7B0A4F1EE313FFF421C /* CropOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28E920EECDC0AE91E31BFD0 /* CropOverlayView.swift */; };
@@ -46,12 +45,15 @@
 		9EE8ADBEAA12A0EEA275185E /* ImageMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */; };
 		A063EF13E00171E82E09A8B7 /* GlanceAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E453F316CEF7E7BDB4E55A4 /* GlanceAppearance.swift */; };
 		A892B9DEDEDB8DFB6E481FD7 /* SnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C8E71638AEAF50684D84BA8 /* SnapshotTests.swift */; };
+		AD9A914E01451D39348A909E /* GestureGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34C6967F1FAD615791FC4501 /* GestureGuide.swift */; };
 		B32703677065B00F62794CDD /* ImageThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A8204091DECCBD91A158543 /* ImageThumbnailView.swift */; };
 		B3802B1EBCD3F3E2B5FFD483 /* AboutSettingsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 380380B7A65C551DF9E1F604 /* AboutSettingsPane.swift */; };
 		C0D7DFD6E17B2921389A85F1 /* CropSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3630793147E18B0BDF814871 /* CropSessionTests.swift */; };
+		C1DB2DAC44BB370529970499 /* PhotoGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E856F4DB6E17C88B751B9C /* PhotoGridView.swift */; };
 		C4C79171C69C4E2EC9AE6772 /* ImagePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B458974AAEA6CC71550618 /* ImagePreviewView.swift */; };
 		C56988171FDAC1E7FA8AF407 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 811A1AAA72117DFB81F850BC /* PermissionsManager.swift */; };
 		CBC0B0CC6A2982AA3CF9D5AB /* RecentLocationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C46F5ECAEEF848DBF7D9DF /* RecentLocationStore.swift */; };
+		CBEB9A79190BD84469DE1CEC /* CompareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C325A540120FB3D78765D622 /* CompareView.swift */; };
 		CC8D83FE3BEE19E6103F015E /* GlanceTitleBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66188D4D075AFF5981D9CADE /* GlanceTitleBar.swift */; };
 		D2DC441F53CD4938DBC26191 /* ThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E86E25856F0EE604A04857 /* ThumbnailCache.swift */; };
 		D8C0CDEB1201E9F2381013D0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73A8C06B3EAEF6D1C84A6E7 /* RootView.swift */; };
@@ -70,6 +72,13 @@
 			remoteGlobalIDString = 5796247D68EDA6C8F0512954;
 			remoteInfo = Glance;
 		};
+		C45E58148FFE6542CF44DE6B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 070164DEC24115A8F4F2D9F7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 341778219227655B089C3FBA;
+			remoteInfo = GlanceiOS;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -79,18 +88,18 @@
 		1B1BE2303D621C4C78C622FA /* GlanceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GlanceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1E453F316CEF7E7BDB4E55A4 /* GlanceAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceAppearance.swift; sourceTree = "<group>"; };
 		1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMetadata.swift; sourceTree = "<group>"; };
-		23618E3A65E5CA7F0930D837 /* RatingBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingBar.swift; sourceTree = "<group>"; };
 		2C841AE4CD2C2327AA89DC78 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		2F048264EA1BA039D935F7F2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		33E86E25856F0EE604A04857 /* ThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailCache.swift; sourceTree = "<group>"; };
+		34C6967F1FAD615791FC4501 /* GestureGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureGuide.swift; sourceTree = "<group>"; };
 		3630793147E18B0BDF814871 /* CropSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropSessionTests.swift; sourceTree = "<group>"; };
 		380380B7A65C551DF9E1F604 /* AboutSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsPane.swift; sourceTree = "<group>"; };
 		3B18B2A03CCAA0E7AF8EC354 /* BrowsingSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowsingSessionStore.swift; sourceTree = "<group>"; };
-		3B57F63B7B132870EC988DDD /* ThumbnailViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailViews.swift; sourceTree = "<group>"; };
 		41EBB1ADB88AE3BB9DB9A521 /* GeneralSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsPane.swift; sourceTree = "<group>"; };
 		457D7EF8A4D45594587C664E /* GlanceiOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GlanceiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		48A25F305947468944E48272 /* GlanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceTests.swift; sourceTree = "<group>"; };
 		4C8E71638AEAF50684D84BA8 /* SnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotTests.swift; sourceTree = "<group>"; };
+		598CA5A7590DAC280CFCDF81 /* GlanceiOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GlanceiOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5BC9A3A3A4853E3C2721F613 /* ImageInfoPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageInfoPanel.swift; sourceTree = "<group>"; };
 		5C616E525B5B79990FEB1588 /* ImageCompareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCompareView.swift; sourceTree = "<group>"; };
 		5CBB1DC136F4AD73C629F084 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -107,6 +116,7 @@
 		89C46F5ECAEEF848DBF7D9DF /* RecentLocationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentLocationStore.swift; sourceTree = "<group>"; };
 		8A8204091DECCBD91A158543 /* ImageThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailView.swift; sourceTree = "<group>"; };
 		8B3B5673204724AF162823D7 /* GlanceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceApp.swift; sourceTree = "<group>"; };
+		8EEFBBB5B4B0C4B08F2C8CAE /* GestureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureTests.swift; sourceTree = "<group>"; };
 		9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRotatorTests.swift; sourceTree = "<group>"; };
 		9EAED5BAAD1D618BC5856BEF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1691AE19E06BB4AEF5B17F6 /* PhotoImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoImageLoader.swift; sourceTree = "<group>"; };
@@ -114,6 +124,7 @@
 		ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceiOSApp.swift; sourceTree = "<group>"; };
 		B28E920EECDC0AE91E31BFD0 /* CropOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropOverlayView.swift; sourceTree = "<group>"; };
 		BDE57FF45E9EEB70485B4C87 /* MetadataManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataManagerTests.swift; sourceTree = "<group>"; };
+		C325A540120FB3D78765D622 /* CompareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompareView.swift; sourceTree = "<group>"; };
 		C646B70E96C1F107AE65C2B8 /* CompareSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompareSession.swift; sourceTree = "<group>"; };
 		C73A8C06B3EAEF6D1C84A6E7 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		CD89804168E77935C49CC967 /* AppearanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceTests.swift; sourceTree = "<group>"; };
@@ -122,6 +133,7 @@
 		DA249A0296B5CB046DE115B1 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 		E0FFCAB55C3E4239D3777139 /* ZoomableImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableImage.swift; sourceTree = "<group>"; };
 		E245270BC7BCC38B089B42CB /* ImageRotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRotator.swift; sourceTree = "<group>"; };
+		E2E856F4DB6E17C88B751B9C /* PhotoGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoGridView.swift; sourceTree = "<group>"; };
 		E6681C13BACBBD0D74A80EB4 /* Glance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Glance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC105AD9246824866F9815B8 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		ED385F58DE21F992E39E09D4 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
@@ -177,6 +189,14 @@
 			);
 			sourceTree = "<group>";
 		};
+		28E1A70B9881A76794C975BF /* GlanceiOSUITests */ = {
+			isa = PBXGroup;
+			children = (
+				8EEFBBB5B4B0C4B08F2C8CAE /* GestureTests.swift */,
+			);
+			path = GlanceiOSUITests;
+			sourceTree = "<group>";
+		};
 		5C3A4E22E3E622DB2770E211 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -198,13 +218,14 @@
 			isa = PBXGroup;
 			children = (
 				2F048264EA1BA039D935F7F2 /* Assets.xcassets */,
+				C325A540120FB3D78765D622 /* CompareView.swift */,
+				34C6967F1FAD615791FC4501 /* GestureGuide.swift */,
 				ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */,
 				1596A9F8D816B3B482AF3903 /* Info.plist */,
 				2C841AE4CD2C2327AA89DC78 /* LibraryStore.swift */,
+				E2E856F4DB6E17C88B751B9C /* PhotoGridView.swift */,
 				A1691AE19E06BB4AEF5B17F6 /* PhotoImageLoader.swift */,
-				23618E3A65E5CA7F0930D837 /* RatingBar.swift */,
 				C73A8C06B3EAEF6D1C84A6E7 /* RootView.swift */,
-				3B57F63B7B132870EC988DDD /* ThumbnailViews.swift */,
 				7CD1BAFE7871F4361C512921 /* ViewerView.swift */,
 				E0FFCAB55C3E4239D3777139 /* ZoomableImage.swift */,
 			);
@@ -243,6 +264,7 @@
 			children = (
 				E6681C13BACBBD0D74A80EB4 /* Glance.app */,
 				457D7EF8A4D45594587C664E /* GlanceiOS.app */,
+				598CA5A7590DAC280CFCDF81 /* GlanceiOSUITests.xctest */,
 				1B1BE2303D621C4C78C622FA /* GlanceTests.xctest */,
 			);
 			name = Products;
@@ -263,6 +285,7 @@
 		EAFA1FE34D1C6A44114B1145 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				28E1A70B9881A76794C975BF /* GlanceiOSUITests */,
 				02B4B839CCBB5C5B1D58F038 /* GlanceTests */,
 			);
 			path = Tests;
@@ -289,6 +312,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		1903B98AB5E4D85450A54CF4 /* GlanceiOSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E124F10ABA3A1E0CEF6CC25D /* Build configuration list for PBXNativeTarget "GlanceiOSUITests" */;
+			buildPhases = (
+				457992251260FC7C17AF1B93 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C04DE6BFC7E75875A7A742FC /* PBXTargetDependency */,
+			);
+			name = GlanceiOSUITests;
+			packageProductDependencies = (
+			);
+			productName = GlanceiOSUITests;
+			productReference = 598CA5A7590DAC280CFCDF81 /* GlanceiOSUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		341778219227655B089C3FBA /* GlanceiOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 71EB7165397805AE45E70DDE /* Build configuration list for PBXNativeTarget "GlanceiOS" */;
@@ -352,6 +393,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					1903B98AB5E4D85450A54CF4 = {
+						DevelopmentTeam = H4982D35ZR;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 341778219227655B089C3FBA;
+					};
 					341778219227655B089C3FBA = {
 						DevelopmentTeam = H4982D35ZR;
 						ProvisioningStyle = Automatic;
@@ -384,6 +430,7 @@
 				5796247D68EDA6C8F0512954 /* Glance */,
 				730743D4A79A9CA460D4AAA3 /* GlanceTests */,
 				341778219227655B089C3FBA /* GlanceiOS */,
+				1903B98AB5E4D85450A54CF4 /* GlanceiOSUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -462,19 +509,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		457992251260FC7C17AF1B93 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6135DC826AB60DB4E2573061 /* GestureTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D3DE4B9D0B2DA8A4B3029EF5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				21439D4265B9AF56E41E0D8A /* AppLogger.swift in Sources */,
+				CBEB9A79190BD84469DE1CEC /* CompareView.swift in Sources */,
+				AD9A914E01451D39348A909E /* GestureGuide.swift in Sources */,
 				A063EF13E00171E82E09A8B7 /* GlanceAppearance.swift in Sources */,
 				34DF0FA369FCADB0B140618D /* GlanceiOSApp.swift in Sources */,
 				9EE8ADBEAA12A0EEA275185E /* ImageMetadata.swift in Sources */,
 				3B3FDDBCF0EC3F28A72A473C /* LibraryStore.swift in Sources */,
+				C1DB2DAC44BB370529970499 /* PhotoGridView.swift in Sources */,
 				4F15B3C04AF000FE487D2B32 /* PhotoImageLoader.swift in Sources */,
-				4B812F92D64984FD2D762E12 /* RatingBar.swift in Sources */,
 				D8C0CDEB1201E9F2381013D0 /* RootView.swift in Sources */,
-				5139690AE7DCB3FBAAFE56C4 /* ThumbnailViews.swift in Sources */,
 				44EA53C748970BDC3DDBBF8E /* ViewerView.swift in Sources */,
 				067DA42AD55C858A63A7958E /* ZoomableImage.swift in Sources */,
 			);
@@ -487,6 +543,11 @@
 			isa = PBXTargetDependency;
 			target = 5796247D68EDA6C8F0512954 /* Glance */;
 			targetProxy = 4A896AE07C4E38DED14E59D7 /* PBXContainerItemProxy */;
+		};
+		C04DE6BFC7E75875A7A742FC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 341778219227655B089C3FBA /* GlanceiOS */;
+			targetProxy = C45E58148FFE6542CF44DE6B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -528,6 +589,24 @@
 				SDKROOT = macosx;
 			};
 			name = Debug;
+		};
+		6058097234679D2F7CE3F732 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvalar.Glance.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GlanceiOS;
+			};
+			name = Release;
 		};
 		8615EFDFE825DB4EDCBE3FD3 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -728,6 +807,24 @@
 			};
 			name = Debug;
 		};
+		FD160DF0C7A4786D901D515E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.anvalar.Glance.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GlanceiOS;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -754,6 +851,15 @@
 			buildConfigurations = (
 				49F89CE9BD8B0507FE45958A /* Debug */,
 				D05ED2ACEFCCF8F1506FF897 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E124F10ABA3A1E0CEF6CC25D /* Build configuration list for PBXNativeTarget "GlanceiOSUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FD160DF0C7A4786D901D515E /* Debug */,
+				6058097234679D2F7CE3F732 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
