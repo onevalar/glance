@@ -26,7 +26,7 @@ struct ImageInfoPanel: View {
             (String(localized: "尺寸"), pixels),
             (String(localized: "格式"), url.pathExtension.uppercased()),
             (String(localized: "所在位置"), url.deletingLastPathComponent().lastPathComponent),
-            (String(localized: "标记"), metadata.getMetadata(for: url).status.title),
+            (String(localized: "评分"), ratingText(metadata.getMetadata(for: url))),
         ]
     }
 
@@ -73,5 +73,11 @@ struct ImageInfoPanel: View {
         .overlay(alignment: .leading) {
             Rectangle().fill(GlancePalette.divider(colorScheme)).frame(width: 1)
         }
+    }
+
+    private func ratingText(_ meta: ImageMetadata) -> String {
+        if meta.isDiscarded { return "已丢弃" }
+        if meta.rating == 0 { return "未评分" }
+        return String(repeating: "★", count: meta.rating) + String(repeating: "☆", count: max(0, 5 - meta.rating))
     }
 }

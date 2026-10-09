@@ -12,6 +12,8 @@ final class CompareSyncHub {
     private struct Entry { weak var view: ZoomingScrollView?; let id: String }
     private var entries: [Entry] = []
     var isEnabled = true
+    /// Latest shared state, applied to photos that scroll into view later (long comparisons).
+    private(set) var last: (zoom: CGFloat, center: CGPoint)?
 
     func register(_ view: ZoomingScrollView, id: String) {
         entries.removeAll { $0.view == nil || $0.id == id }
@@ -20,6 +22,7 @@ final class CompareSyncHub {
 
     func broadcast(from id: String, zoom: CGFloat, center: CGPoint) {
         guard isEnabled else { return }
+        last = (zoom, center)
         for entry in entries where entry.id != id {
             entry.view?.applySync(zoom: zoom, center: center)
         }
@@ -38,16 +41,16 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     var onSingleTap: (() -> Void)?
     var onZoomedIn: (() -> Void)?
 
-    /// Rating by vertical swipe. `progress` runs from -1 (dragged down) to +1 (dragged up).
+    /// Rating by vertical drag while the photo is fitted: `offset` > 0 is dragged up (stars),
+    /// < 0 dragged down (trash); `xFraction` is where the finger is across the screen (0…1), which picks the star.
     var ratingGesturesEnabled = true
-    var onVerticalProgress: ((CGFloat) -> Void)?
-    var onVerticalCommit: ((Int) -> Void)?
+    var onVerticalDrag: ((_ offset: CGFloat, _ xFraction: CGFloat) -> Void)?
+    var onVerticalCommit: ((_ direction: Int, _ xFraction: CGFloat) -> Void)?
 
     var syncHub: CompareSyncHub? { didSet { syncHub?.register(self, id: syncID) } }
     var syncID = ""
 
-    private static let commitDistance: CGFloat = 80
-    private static let progressDistance: CGFloat = 120
+    private static let commitDistance: CGFloat = 70
 
     private var needsFit = true
     private var lastBoundsSize: CGSize = .zero
@@ -112,6 +115,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         maximumZoomScale = min(max(actualPixels, 4), 20)
         didReportZoomedIn = false
         onZoomChange?(false)
+        if let last = syncHub?.last, syncHub?.isEnabled == true { applySync(zoom: last.zoom, center: last.center) }
     }
 
     private func centerImage() {
@@ -137,8 +141,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         if ratingGesturesEnabled, isFitted, isDragging || isDecelerating {
-            let progress = (contentOffset.y / Self.progressDistance).clamped(to: -1...1)
-            onVerticalProgress?(progress)
+            onVerticalDrag?(contentOffset.y, fingerFraction())
         }
         broadcastTransform()
     }
@@ -147,14 +150,36 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
                                    targetContentOffset: UnsafeMutablePointer<CGPoint>) {
         guard ratingGesturesEnabled, isFitted else { return }
         let offset = contentOffset.y
+        let fraction = fingerFraction()
         let flickedUp = velocity.y > 0.9 && offset > 20
         let flickedDown = velocity.y < -0.9 && offset < -20
         if offset > Self.commitDistance || flickedUp {
-            onVerticalCommit?(1)
+            onVerticalCommit?(1, fraction)
         } else if offset < -Self.commitDistance || flickedDown {
-            onVerticalCommit?(-1)
+            onVerticalCommit?(-1, fraction)
         }
-        onVerticalProgress?(0)
+        onVerticalDrag?(0, fraction)
+    }
+
+    /// Horizontal finger position across the window, 0…1.
+    private func fingerFraction() -> CGFloat {
+        let width = window?.bounds.width ?? bounds.width
+        guard width > 0 else { return 0.5 }
+        return (panGestureRecognizer.location(in: nil).x / width).clamped(to: 0...1)
+    }
+
+    /// The photo drops away (into the trash that rises from the bottom) before it is replaced.
+    func playDiscardFall() {
+        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseIn]) {
+            self.transform = CGAffineTransform(translationX: 0, y: self.bounds.height * 0.32).scaledBy(x: 0.22, y: 0.22)
+            self.alpha = 0
+        } completion: { _ in
+            // Ready again in case the same page stays on screen.
+            UIView.performWithoutAnimation {
+                self.transform = .identity
+                self.alpha = 1
+            }
+        }
     }
 
     // MARK: - Comparison sync
@@ -225,8 +250,13 @@ struct ZoomableImage: UIViewRepresentable {
     var onZoomChange: (Bool) -> Void
     var onSingleTap: () -> Void
     var onZoomedIn: () -> Void
-    var onVerticalProgress: (CGFloat) -> Void = { _ in }
-    var onVerticalCommit: (Int) -> Void = { _ in }
+    var onVerticalDrag: (CGFloat, CGFloat) -> Void = { _, _ in }
+    var onVerticalCommit: (Int, CGFloat) -> Void = { _, _ in }
+    /// Bumped to run the discard "fall" animation on this photo.
+    var discardFallToken = 0
+
+    final class Coordinator { var lastFallToken = 0 }
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> ZoomingScrollView {
         let view = ZoomingScrollView()
@@ -239,8 +269,12 @@ struct ZoomableImage: UIViewRepresentable {
         view.onZoomChange = onZoomChange
         view.onSingleTap = onSingleTap
         view.onZoomedIn = onZoomedIn
-        view.onVerticalProgress = onVerticalProgress
+        view.onVerticalDrag = onVerticalDrag
         view.onVerticalCommit = onVerticalCommit
+        if context.coordinator.lastFallToken != discardFallToken {
+            context.coordinator.lastFallToken = discardFallToken
+            if discardFallToken > 0 { view.playDiscardFall() }
+        }
         view.ratingGesturesEnabled = ratingGesturesEnabled
         view.pixelSize = pixelSize
         if view.imageView.image !== image {

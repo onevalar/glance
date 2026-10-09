@@ -68,13 +68,7 @@ class AppState: ObservableObject {
     }
 
     private func matches(_ url: URL, filter: PhotoFilter) -> Bool {
-        let status = MetadataManager.shared.getMetadata(for: url).status
-        switch filter {
-        case .all: return true
-        case .keep: return status == .keep
-        case .undecided: return status == .undecided
-        case .discard: return status == .discard
-        }
+        filter.matches(MetadataManager.shared.getMetadata(for: url))
     }
 
     /// Number of photos in the folder that belong to `filter` (ignores the search text).
@@ -171,7 +165,27 @@ class AppState: ObservableObject {
         selectSingleImage(index: selectedImageIndex - 1)
     }
 
-    func setStatusForSelectedImages(_ status: ImageStatus) {
+    /// Rates the selected photos with 1…5 stars (the same star again clears it when one photo is selected).
+    func rateSelectedImages(stars: Int) {
+        let toggles = selectedImageIndices.count == 1
+        editSelectedImages { meta in
+            if toggles && meta.rating == stars { meta.setRating(0) } else { meta.setRating(stars) }
+        }
+    }
+
+    func clearRatingOfSelectedImages() {
+        editSelectedImages { $0.setRating(0) }
+    }
+
+    /// Puts the selected photos in the discard pile (nothing is deleted); again takes a single photo back out.
+    func toggleDiscardForSelectedImages() {
+        let toggles = selectedImageIndices.count == 1
+        editSelectedImages { meta in
+            meta.setDiscarded(toggles ? !meta.isDiscarded : true)
+        }
+    }
+
+    private func editSelectedImages(_ edit: (inout ImageMetadata) -> Void) {
         let manager = MetadataManager.shared
         let urlsToUpdate = selectedImageIndices.compactMap { idx -> URL? in
             guard idx >= 0 && idx < imageFiles.count else { return nil }
@@ -181,9 +195,7 @@ class AppState: ObservableObject {
         guard !urlsToUpdate.isEmpty else { return }
         
         for url in urlsToUpdate {
-            manager.updateMetadata(for: url) { meta in
-                meta.status = status
-            }
+            manager.updateMetadata(for: url, update: edit)
         }
         
         // Trigger UI update

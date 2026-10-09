@@ -48,7 +48,7 @@ struct ContentView: View {
             Button("取消", role: .cancel) { }
             Button("清空", role: .destructive) { appState.bulkMoveDiscardedToTrash() }
         } message: {
-            Text("确定要将这 \(appState.count(for: .discard)) 张标记为“丢弃”的图片移动到系统废纸篓吗？此操作不可撤销。")
+            Text("确定要将这 \(appState.count(for: .discarded)) 张标记为“丢弃”的图片移动到系统废纸篓吗？此操作不可撤销。")
         }
     }
 
@@ -171,10 +171,10 @@ struct ContentView: View {
             Divider()
             Button("删除当前照片…", role: .destructive) { confirmDelete() }
                 .disabled(appState.currentImageURL == nil)
-            Button("清空丢弃的照片 (\(appState.count(for: .discard)))…", role: .destructive) {
+            Button("清空丢弃的照片 (\(appState.count(for: .discarded)))…", role: .destructive) {
                 showingBulkClearAlert = true
             }
-            .disabled(appState.count(for: .discard) == 0)
+            .disabled(appState.count(for: .discarded) == 0)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 15))

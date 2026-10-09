@@ -30,6 +30,7 @@ struct GlanceApp: App {
     // 设置 App Delegate 以响应 open file 请求
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @ObservedObject var appState = AppState()
+    @AppStorage("starScale") private var starScale = 5
 
     init() {
         logger.info("app init .....")
@@ -56,46 +57,27 @@ struct GlanceApp: App {
                 OpenSettingsButton()
             }
             CommandMenu("照片") {
-                Button("标记为保留") {
-                    appState.setStatusForSelectedImages(.keep)
+                ForEach(1...5, id: \.self) { stars in
+                    Button("评 \(stars) 星") { appState.rateSelectedImages(stars: stars) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(stars)")), modifiers: [])
+                        .disabled(stars > starScale)
                 }
-                .keyboardShortcut("p", modifiers: [])
-                
-                Button("标记为待定") {
-                    appState.setStatusForSelectedImages(.undecided)
-                }
-                .keyboardShortcut("u", modifiers: [])
-                
-                Button("标记为丢弃") {
-                    appState.setStatusForSelectedImages(.discard)
-                }
-                .keyboardShortcut("x", modifiers: [])
-                
+                Button("清除评分") { appState.clearRatingOfSelectedImages() }
+                    .keyboardShortcut("0", modifiers: [])
+
                 Divider()
-                
+
+                Button("丢弃（放入丢弃箱）") { appState.toggleDiscardForSelectedImages() }
+                    .keyboardShortcut("x", modifiers: [])
+
+                Divider()
+
                 Button(appState.isCropEditing ? "退出裁剪模式" : "进入裁剪模式") {
                     if appState.selectedImageIndices.count <= 1 {
                         appState.isCropEditing.toggle()
                     }
                 }
                 .keyboardShortcut("r", modifiers: [])
-                
-                Divider()
-                
-                Button("评分：1 (丢弃)") {
-                    appState.setStatusForSelectedImages(.discard)
-                }
-                .keyboardShortcut("1", modifiers: [])
-                
-                Button("评分：2 (待定)") {
-                    appState.setStatusForSelectedImages(.undecided)
-                }
-                .keyboardShortcut("2", modifiers: [])
-                
-                Button("评分：3 (保留)") {
-                    appState.setStatusForSelectedImages(.keep)
-                }
-                .keyboardShortcut("3", modifiers: [])
             }
         }
         .environmentObject(appState)

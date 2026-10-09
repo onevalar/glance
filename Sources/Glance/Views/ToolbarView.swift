@@ -1,17 +1,18 @@
 import AppKit
 import SwiftUI
 
-/// Floating action bar under the photo: ‹  丢弃 X | 待定 U | 保留 P  ›  裁剪 R (Paper: 01 · macOS 单图).
+/// Floating action bar under the photo: ‹  丢弃 X | ★★★★★ (1–5) |  ›  裁剪 R.
 struct ToolBarView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var appState: AppState
     @ObservedObject private var metadata = MetadataManager.shared
+    @AppStorage("starScale") private var starScale = 5
 
     var onHoverEnter: (() -> Void)?
     var onHoverExit: (() -> Void)?
 
-    private var current: ImageStatus? {
-        appState.currentImageURL.map { metadata.getMetadata(for: $0).status }
+    private var current: ImageMetadata {
+        appState.currentImageURL.map { metadata.getMetadata(for: $0) } ?? ImageMetadata()
     }
 
     var body: some View {
@@ -19,9 +20,10 @@ struct ToolBarView: View {
             barButton("‹", label: "上一张", disabled: appState.selectedImageIndex <= 0) {
                 appState.navigateToPrevImage()
             }
-            rating("丢弃 X", .discard)
-            rating("待定 U", .undecided)
-            rating("保留 P", .keep)
+            barButton("丢弃 X", label: "丢弃", active: current.isDiscarded, activeFill: Color.red.opacity(0.22)) {
+                appState.toggleDiscardForSelectedImages()
+            }
+            stars
             barButton("›", label: "下一张", disabled: appState.selectedImageIndex >= appState.imageFiles.count - 1) {
                 appState.navigateToNextImage()
             }
@@ -37,22 +39,38 @@ struct ToolBarView: View {
         }
     }
 
-    private func rating(_ title: String, _ status: ImageStatus) -> some View {
-        barButton(title, label: LocalizedStringKey(status.title), active: current == status) {
-            appState.setStatusForSelectedImages(status)
+    /// Clickable stars; keys 1…5 do the same, 0 clears.
+    private var stars: some View {
+        HStack(spacing: 2) {
+            ForEach(1...starScale, id: \.self) { index in
+                Button {
+                    appState.rateSelectedImages(stars: index)
+                } label: {
+                    Image(systemName: index <= current.rating ? "star.fill" : "star")
+                        .font(.system(size: 15))
+                        .foregroundStyle(index <= current.rating ? Color.yellow : GlancePalette.secondary(colorScheme))
+                        .frame(width: 26, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("\(index) 星（按 \(index)）")
+                .accessibilityLabel("\(index) 星")
+                .accessibilityAddTraits(index == current.rating ? .isSelected : [])
+            }
         }
-        .accessibilityAddTraits(current == status ? .isSelected : [])
+        .padding(.horizontal, 6)
+        .background(GlancePalette.buttonFill(colorScheme), in: .rect(cornerRadius: 8))
     }
 
     private func barButton(_ title: String, label: LocalizedStringKey, active: Bool = false,
-                           disabled: Bool = false, action: @escaping () -> Void) -> some View {
+                           activeFill: Color? = nil, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(GlancePalette.secondary(colorScheme))
                 .padding(.horizontal, 12)
                 .frame(height: 32)
-                .background(active ? GlancePalette.accentSoft(colorScheme) : GlancePalette.buttonFill(colorScheme),
+                .background(active ? (activeFill ?? GlancePalette.accentSoft(colorScheme)) : GlancePalette.buttonFill(colorScheme),
                             in: .rect(cornerRadius: 8))
                 .contentShape(.rect(cornerRadius: 8))
         }

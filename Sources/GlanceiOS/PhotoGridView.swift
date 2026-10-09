@@ -22,6 +22,9 @@ struct PhotoGridView: View {
     @State private var selecting = false
     @State private var selected: [String] = []
 
+    /// Comparing many shots at once is allowed; this only keeps memory in check.
+    private static let maxCompare = 24
+
     private let columns = [GridItem(.adaptive(minimum: 104, maximum: 180), spacing: 3)]
 
     var body: some View {
@@ -31,7 +34,7 @@ struct PhotoGridView: View {
                     ForEach(store.visible, id: \.localIdentifier) { asset in
                         GridCell(
                             asset: asset,
-                            status: metadata.getMetadata(forKey: asset.localIdentifier).status,
+                            meta: metadata.getMetadata(forKey: asset.localIdentifier),
                             isCurrent: asset.localIdentifier == store.currentID,
                             selectionIndex: selected.firstIndex(of: asset.localIdentifier).map { $0 + 1 },
                             selecting: selecting
@@ -80,7 +83,7 @@ struct PhotoGridView: View {
     /// Bottom glass panel: says what to do, and holds the one big action.
     private var compareBar: some View {
         VStack(spacing: 10) {
-            Text(selected.count < 2 ? "再点 \(2 - selected.count) 张以上，最多选 4 张" : "已选 \(selected.count) 张，可以开始对比了")
+            Text(selected.count < 2 ? "再点几张照片（至少 2 张，数量不限）" : "已选 \(selected.count) 张，可以开始对比了")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
             Button(action: startCompare) {
@@ -115,7 +118,7 @@ struct PhotoGridView: View {
         if selecting {
             if let index = selected.firstIndex(of: id) {
                 selected.remove(at: index)
-            } else if selected.count < 4 {
+            } else if selected.count < Self.maxCompare {
                 selected.append(id)
             } else {
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
@@ -141,7 +144,7 @@ struct PhotoGridView: View {
 
 private struct GridCell: View {
     let asset: PHAsset
-    let status: ImageStatus
+    let meta: ImageMetadata
     let isCurrent: Bool
     let selectionIndex: Int?
     let selecting: Bool
@@ -160,15 +163,17 @@ private struct GridCell: View {
                 }
             }
             .clipped()
-            .opacity(status == .discard ? 0.45 : 1)
+            .opacity(meta.isDiscarded ? 0.45 : 1)
             .overlay(alignment: .topTrailing) {
-                switch status {
-                case .keep:
-                    Image(systemName: "flag.circle.fill").foregroundStyle(.white, .green).font(.system(size: 20)).padding(4)
-                case .discard:
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.white, .red).font(.system(size: 20)).padding(4)
-                case .undecided:
-                    EmptyView()
+                if meta.isDiscarded {
+                    Image(systemName: "trash.circle.fill").foregroundStyle(.white, .red).font(.system(size: 22)).padding(4)
+                } else if meta.rating > 0 {
+                    Label("\(meta.rating)", systemImage: "star.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.black.opacity(0.85))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Color.yellow, in: .capsule)
+                        .padding(4)
                 }
             }
             .overlay {
@@ -200,7 +205,7 @@ private struct GridCell: View {
                 )
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("照片，\(status.title)")
+            .accessibilityLabel("照片，\(meta.isDiscarded ? "已丢弃" : meta.rating > 0 ? "\(meta.rating) 星" : "未评分")")
             .accessibilityAddTraits(selectionIndex != nil ? .isSelected : [])
     }
 }

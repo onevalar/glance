@@ -61,10 +61,22 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         metadata.getMetadata(forKey: asset.localIdentifier).status
     }
 
+    func stars(of asset: PHAsset) -> Int {
+        metadata.getMetadata(forKey: asset.localIdentifier).rating
+    }
+
+    private func matches(_ asset: PHAsset, _ filter: PhotoFilter) -> Bool {
+        filter.matches(metadata.getMetadata(forKey: asset.localIdentifier))
+    }
+
     // MARK: - Permission & loading
 
     func start() async {
-        if UserDefaults.standard.bool(forKey: "resetRatings") { metadata.removeAllMetadata() }
+        if UserDefaults.standard.bool(forKey: "resetRatings") {
+            // UI tests start from a clean slate: no ratings, default star scale.
+            metadata.removeAllMetadata()
+            UserDefaults.standard.set(5, forKey: "starScale")
+        }
         let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         if current == .notDetermined {
             _ = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
@@ -164,14 +176,7 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
     /// otherwise selects whatever slid into its position.
     private func rebuild(preferIndex: Int?) {
         let wanted = filter
-        visible = allAssets.filter { asset in
-            switch wanted {
-            case .all: return true
-            case .keep: return status(of: asset) == .keep
-            case .undecided: return status(of: asset) == .undecided
-            case .discard: return status(of: asset) == .discard
-            }
-        }
+        visible = allAssets.filter { matches($0, wanted) }
 
         if let currentID, visible.contains(where: { $0.localIdentifier == currentID }) { return }
         if visible.isEmpty {
@@ -203,23 +208,38 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
 
     // MARK: - Rating
 
-    /// What the last rating changed, so it can be undone from the toast.
+    /// What the last action changed, so it can be undone from the toast.
     struct RatingEvent: Equatable, Identifiable {
         let id = UUID()
         let assetID: String
-        let previous: ImageStatus
-        let new: ImageStatus
+        let previous: ImageMetadata
+        let new: ImageMetadata
+
+        /// Text for the toast.
+        var message: String {
+            if new.isDiscarded { return "已放入丢弃" }
+            if new.rating > 0 { return "已评 \(new.rating) 星" }
+            return "已取消评分"
+        }
     }
 
     @Published private(set) var lastRating: RatingEvent?
 
-    /// Rates the current photo. Choosing the status it already has clears it back to 待定,
-    /// so a wrong swipe is fixed by swiping the same way again.
-    func rate(_ status: ImageStatus, advance: Bool) {
+    /// Rates the current photo with 1…5 stars. Choosing the rating it already has clears it.
+    func rate(stars: Int, advance: Bool) {
+        change(advance: advance) { meta in
+            if meta.rating == stars { meta.setRating(0) } else { meta.setRating(stars) }
+        }
+    }
+
+    /// Puts the current photo in the discard pile (nothing is deleted yet). Doing it again takes it back out.
+    func discard(advance: Bool) {
+        change(advance: advance) { meta in meta.setDiscarded(!meta.isDiscarded) }
+    }
+
+    private func change(advance: Bool, _ edit: (inout ImageMetadata) -> Void) {
         guard let asset = currentAsset, let index = currentIndex else { return }
-        let previous = self.status(of: asset)
-        let result: ImageStatus = previous == status ? .undecided : status
-        apply(result, to: asset.localIdentifier, previous: previous)
+        apply(to: asset.localIdentifier, edit)
 
         if filter != .all {
             // The photo may have left the filtered list; the next one takes its place.
@@ -230,22 +250,24 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         objectWillChange.send()
     }
 
-    /// Sets a specific photo's rating without moving the selection (used by the comparison screen).
-    func setStatus(_ status: ImageStatus, forAssetID id: String) {
-        let previous = metadata.getMetadata(forKey: id).status
-        let result: ImageStatus = previous == status ? .undecided : status
-        apply(result, to: id, previous: previous)
+    /// Edits a specific photo without moving the selection (comparison screen).
+    func edit(assetID id: String, _ edit: (inout ImageMetadata) -> Void) {
+        apply(to: id, edit)
         objectWillChange.send()
     }
 
-    private func apply(_ status: ImageStatus, to id: String, previous: ImageStatus) {
-        metadata.updateMetadata(forKey: id) { $0.status = status }
-        lastRating = RatingEvent(assetID: id, previous: previous, new: status)
+    private func apply(to id: String, _ edit: (inout ImageMetadata) -> Void) {
+        let previous = metadata.getMetadata(forKey: id)
+        var updated = previous
+        edit(&updated)
+        guard updated != previous else { return }
+        metadata.updateMetadata(forKey: id) { $0 = updated }
+        lastRating = RatingEvent(assetID: id, previous: previous, new: updated)
     }
 
     func undoLastRating() {
         guard let event = lastRating else { return }
-        metadata.updateMetadata(forKey: event.assetID) { $0.status = event.previous }
+        metadata.updateMetadata(forKey: event.assetID) { $0 = event.previous }
         lastRating = nil
         // Bring the photo back into view, even if the active filter had hidden it.
         let index = currentIndex
@@ -254,14 +276,9 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         objectWillChange.send()
     }
 
-    /// Number of photos in the current album with the given rating (all photos for `.all`).
+    /// Number of photos in the current album that match `filter`.
     func count(_ filter: PhotoFilter) -> Int {
-        switch filter {
-        case .all: return allAssets.count
-        case .keep: return allAssets.reduce(0) { $0 + (status(of: $1) == .keep ? 1 : 0) }
-        case .undecided: return allAssets.reduce(0) { $0 + (status(of: $1) == .undecided ? 1 : 0) }
-        case .discard: return allAssets.reduce(0) { $0 + (status(of: $1) == .discard ? 1 : 0) }
-        }
+        allAssets.reduce(0) { $0 + (matches($1, filter) ? 1 : 0) }
     }
 
     func asset(withID id: String) -> PHAsset? {

@@ -12,6 +12,7 @@ struct ThumbnailSidebar: View {
     @ObservedObject private var metadata = MetadataManager.shared
 
     @Binding var isSearching: Bool
+    @AppStorage("starScale") private var starScale = 5
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -66,18 +67,18 @@ struct ThumbnailSidebar: View {
 
     private var filterMenu: some View {
         Menu {
-            ForEach(PhotoFilter.allCases) { filter in
+            ForEach(PhotoFilter.options(scale: starScale)) { filter in
                 Button {
                     appState.activeFilter = filter
                     appState.updateFilteredImages(preserveSelection: true)
                 } label: {
-                    Text("\(filter.rawValue) \(appState.count(for: filter))")
+                    Text("\(filter.title) \(appState.count(for: filter))")
                     if appState.activeFilter == filter { Image(systemName: "checkmark") }
                 }
             }
         } label: {
             HStack(spacing: 6) {
-                Text("\(appState.activeFilter.rawValue) \(appState.imageFiles.count)")
+                Text("\(appState.activeFilter.title) \(appState.imageFiles.count)")
                 Image(systemName: "arrowtriangle.down.fill").font(.system(size: 6))
             }
             .font(.system(size: 13, weight: .medium))
@@ -91,7 +92,7 @@ struct ThumbnailSidebar: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .accessibilityLabel("筛选")
-        .accessibilityValue("\(appState.activeFilter.rawValue) \(appState.imageFiles.count)")
+        .accessibilityValue("\(appState.activeFilter.title) \(appState.imageFiles.count)")
     }
 
     private var searchField: some View {

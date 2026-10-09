@@ -8,6 +8,7 @@ import SwiftUI
 /// First-launch (and on demand) explanation of the gestures; there are no on-screen rating buttons.
 struct GestureGuide: View {
     @Environment(\.colorScheme) private var scheme
+    var starScale = 5
     var onDismiss: () -> Void
 
     var body: some View {
@@ -20,13 +21,13 @@ struct GestureGuide: View {
                     .font(.system(size: 24, weight: .semibold))
                     .padding(.bottom, 4)
 
-                row("arrow.up", .green, "上滑，或点底部“保留”", "保留这张")
-                row("arrow.down", .red, "下滑，或点底部“丢弃”", "丢弃这张")
+                row("star.fill", .yellow, "往上滑，出现 \(starScale) 颗星", "手指停在第几颗，松手就是几星")
+                row("trash", .red, "往下拉，垃圾桶升起", "拖进去松手就是丢弃，不会立刻删除")
                 row("arrow.left.and.right", .white, "左右滑动", "切换照片")
                 row("plus.magnifyingglass", .white, "双击或双指张开", "放大看细节")
-                row("rectangle.split.2x1", .white, "底部“对比”", "选 2–4 张相似的照片，并排放大对比")
+                row("rectangle.split.2x1", .white, "底部“对比”", "选几张相似的照片，并排放大对比")
 
-                Text("标错了？再滑一次同方向取消，或点提示条上的“撤销”。")
+                Text("评错了？点屏幕下方的“撤销”。丢弃的照片可以随时在“筛选 → 已丢弃”里找回，最后再统一删除。")
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.7))
 

@@ -125,6 +125,8 @@ struct CompareView: View {
         let landscape = size.width > size.height
         let list = assets
         switch list.count {
+        case 0, 1:
+            if let only = list.first { cell(only) }
         case 2:
             stack(landscape ? .horizontal : .vertical, list)
         case 3 where landscape:
@@ -134,14 +136,23 @@ struct CompareView: View {
                 cell(list[0])
                 HStack(spacing: 3) { cell(list[1]); cell(list[2]) }
             }
-        default:
+        case 4:
             VStack(spacing: 3) {
                 HStack(spacing: 3) { cell(list[0]); cell(list[1]) }
-                HStack(spacing: 3) {
-                    if list.count > 2 { cell(list[2]) }
-                    if list.count > 3 { cell(list[3]) }
+                HStack(spacing: 3) { cell(list[2]); cell(list[3]) }
+            }
+        default:
+            // Any number of photos: a scrolling grid, two rows visible at a time.
+            let columns = min(4, max(2, Int(size.width / 190)))
+            let cellHeight = max(220, (size.height - 3) / 2)
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: columns), spacing: 3) {
+                    ForEach(list, id: \.localIdentifier) { asset in
+                        cell(asset).frame(height: cellHeight)
+                    }
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -174,7 +185,7 @@ private struct CompareCell: View {
     let isFocused: Bool
     var onFocus: () -> Void
 
-    private var status: ImageStatus { metadata.getMetadata(forKey: asset.localIdentifier).status }
+    @AppStorage("starScale") private var starScale = 5
 
     var body: some View {
         ZStack {
@@ -189,10 +200,7 @@ private struct CompareCell: View {
                     Spacer()
                 }
                 Spacer()
-                HStack(spacing: 8) {
-                    chip("丢弃", .discard)
-                    chip("保留", .keep)
-                }
+                controls
             }
             .padding(8)
         }
@@ -204,21 +212,41 @@ private struct CompareCell: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func chip(_ title: String, _ target: ImageStatus) -> some View {
-        let on = status == target
-        return Button {
-            store.setStatus(target, forAssetID: asset.localIdentifier)
-        } label: {
-            Text(on ? (target == .keep ? "已保留" : "已丢弃") : title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(on ? Color.white : Color.primary)
-                .padding(.horizontal, 16)
-                .frame(minHeight: 40)
-                .background(on ? (target == .keep ? Color.green : Color.red) : Color.clear, in: .capsule)
-                .contentShape(.capsule)
-                .glassSurface(.capsule)
+    /// Discard + stars for this photo, on one glass capsule.
+    private var controls: some View {
+        let meta = metadata.getMetadata(forKey: asset.localIdentifier)
+        let starWidth: CGFloat = starScale == 5 ? 30 : 38
+        return HStack(spacing: 0) {
+            Button {
+                store.edit(assetID: asset.localIdentifier) { $0.setDiscarded(!$0.isDiscarded) }
+            } label: {
+                Image(systemName: meta.isDiscarded ? "trash.fill" : "trash")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(meta.isDiscarded ? Color.white : Color.primary)
+                    .frame(width: 38, height: 38)
+                    .background(meta.isDiscarded ? Color.red : .clear, in: .circle)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("丢弃")
+            .accessibilityIdentifier("compare.discard.\(asset.localIdentifier)")
+
+            ForEach(1...starScale, id: \.self) { index in
+                Button {
+                    store.edit(assetID: asset.localIdentifier) { $0.setRating($0.rating == index ? 0 : index) }
+                } label: {
+                    Image(systemName: index <= meta.rating ? "star.fill" : "star")
+                        .font(.system(size: 18))
+                        .foregroundStyle(index <= meta.rating ? Color.yellow : Color.primary)
+                        .frame(width: starWidth, height: 38)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(index) 星")
+                .accessibilityIdentifier("compare.star.\(index).\(asset.localIdentifier)")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("compare.\(target.rawValue).\(asset.localIdentifier)")
+        .padding(3)
+        .glassSurface(.capsule)
     }
 }

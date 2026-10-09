@@ -13,8 +13,9 @@ struct PhotoPage: View {
     var syncHub: CompareSyncHub?
     var onZoomChange: (Bool) -> Void = { _ in }
     var onSingleTap: () -> Void = {}
-    var onVerticalProgress: (CGFloat) -> Void = { _ in }
-    var onVerticalCommit: (Int) -> Void = { _ in }
+    var discardFallToken = 0
+    var onVerticalDrag: (CGFloat, CGFloat) -> Void = { _, _ in }
+    var onVerticalCommit: (Int, CGFloat) -> Void = { _, _ in }
 
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
@@ -33,8 +34,9 @@ struct PhotoPage: View {
                         onZoomChange: onZoomChange,
                         onSingleTap: onSingleTap,
                         onZoomedIn: { Task { await loadOriginal() } },
-                        onVerticalProgress: onVerticalProgress,
-                        onVerticalCommit: onVerticalCommit
+                        onVerticalDrag: onVerticalDrag,
+                        onVerticalCommit: onVerticalCommit,
+                        discardFallToken: discardFallToken
                     )
                 } else {
                     ProgressView()
@@ -67,10 +69,12 @@ struct ViewerPager: View {
     @State private var isZoomed = false
 
     var onSingleTap: () -> Void
-    /// -1 … +1 while a photo is being dragged down / up.
-    var onVerticalProgress: (CGFloat) -> Void
-    /// +1 = swiped up (keep), -1 = swiped down (discard).
-    var onVerticalCommit: (Int) -> Void
+    /// Vertical drag of the current photo: offset (> 0 up, < 0 down) and finger x across the screen (0…1).
+    var onVerticalDrag: (CGFloat, CGFloat) -> Void
+    /// Released past the threshold: +1 = up (stars), -1 = down (trash).
+    var onVerticalCommit: (Int, CGFloat) -> Void
+    /// Bumped when the current photo should play the discard animation.
+    var discardFallToken = 0
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -82,11 +86,12 @@ struct ViewerPager: View {
                             if asset.localIdentifier == store.currentID { isZoomed = zoomed }
                         },
                         onSingleTap: onSingleTap,
-                        onVerticalProgress: { progress in
-                            if asset.localIdentifier == store.currentID { onVerticalProgress(progress) }
+                        discardFallToken: asset.localIdentifier == store.currentID ? discardFallToken : 0,
+                        onVerticalDrag: { offset, x in
+                            if asset.localIdentifier == store.currentID { onVerticalDrag(offset, x) }
                         },
-                        onVerticalCommit: { direction in
-                            if asset.localIdentifier == store.currentID { onVerticalCommit(direction) }
+                        onVerticalCommit: { direction, x in
+                            if asset.localIdentifier == store.currentID { onVerticalCommit(direction, x) }
                         }
                     )
                     .containerRelativeFrame(.horizontal)

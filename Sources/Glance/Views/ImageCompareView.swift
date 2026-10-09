@@ -39,6 +39,7 @@ struct ImageCompareView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var metadataRevision = 0
     @State private var imageAreaSize: CGSize = .zero
+    @AppStorage("starScale") private var starScale = 5
     var onScaleChanged: ((CGFloat) -> Void)?
 
     private var selectedUrls: [URL] {
@@ -159,14 +160,23 @@ struct ImageCompareView: View {
                     .frame(maxWidth: .infinity).frame(height: max(40, height - 96))
             }
 
-            HStack {
-                Button(metadata.status == .discard ? "已丢弃" : "丢弃") { rate(url, status: .discard) }
-                    .buttonStyle(CompareChipStyle(prominent: metadata.status == .discard, compact: true))
+            HStack(spacing: 8) {
+                Button(metadata.isDiscarded ? "已丢弃" : "丢弃") { edit(url) { $0.setDiscarded(!$0.isDiscarded) } }
+                    .buttonStyle(CompareChipStyle(prominent: metadata.isDiscarded, compact: true))
                     .accessibilityLabel("丢弃：\(url.lastPathComponent)")
                 Spacer(minLength: 4)
-                Button(metadata.status == .keep ? "已保留" : "标记保留") { rate(url, status: .keep) }
-                    .buttonStyle(CompareChipStyle(prominent: metadata.status == .keep, compact: true))
-                    .accessibilityLabel("保留：\(url.lastPathComponent)")
+                HStack(spacing: 0) {
+                    ForEach(1...starScale, id: \.self) { index in
+                        Button { edit(url) { $0.setRating($0.rating == index ? 0 : index) } } label: {
+                            Image(systemName: index <= metadata.rating ? "star.fill" : "star")
+                                .foregroundStyle(index <= metadata.rating ? Color.yellow : GlancePalette.secondary(colorScheme))
+                                .frame(width: 24, height: 30)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(index) 星：\(url.lastPathComponent)")
+                    }
+                }
             }
             .padding(.horizontal, 16).frame(height: 56)
         }
@@ -224,14 +234,13 @@ struct ImageCompareView: View {
         })
     }
 
-    private func rate(_ url: URL, status: ImageStatus) {
+    private func edit(_ url: URL, _ change: (inout ImageMetadata) -> Void) {
         focus(url)
-        MetadataManager.shared.updateMetadata(for: url) { $0.status = status }
+        MetadataManager.shared.updateMetadata(for: url, update: change)
         NotificationCenter.default.post(name: Notification.Name("metadata-updated"), object: nil)
         if appState.activeFilter != .all { appState.updateFilteredImages() }
     }
 }
-
 
 /// Small rounded chip used for the compare screen's buttons (Paper: control fill, 8pt radius).
 struct CompareChipStyle: ButtonStyle {

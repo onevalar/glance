@@ -56,4 +56,41 @@ struct MetadataTests {
         let cleanedMeta = manager.getMetadata(for: dummyURL)
         #expect(cleanedMeta.status == .undecided)
     }
+
+    @Test("Star rating, discard and legacy files")
+    func testStarRating() throws {
+        var meta = ImageMetadata()
+        #expect(meta.rating == 0 && !meta.isDiscarded)
+
+        meta.setRating(3)
+        #expect(meta.rating == 3 && meta.status == .keep)
+
+        meta.setDiscarded(true)
+        #expect(meta.isDiscarded && meta.rating == 0)
+
+        meta.setDiscarded(false)
+        #expect(!meta.isDiscarded && meta.status == .undecided)
+
+        meta.setRating(9)
+        #expect(meta.rating == 5, "ratings are clamped to 5 stars")
+
+        // Files written before stars existed only said "keep": that becomes the top rating.
+        let legacy = try JSONDecoder().decode(ImageMetadata.self, from: Data(#"{"status":"keep"}"#.utf8))
+        #expect(legacy.rating == 5)
+
+        let roundTrip = try JSONDecoder().decode(ImageMetadata.self, from: JSONEncoder().encode(ImageMetadata(status: .keep, stars: 2)))
+        #expect(roundTrip.rating == 2)
+    }
+
+    @Test("Filters match star levels, unrated and the discard pile")
+    func testFilters() {
+        let three = ImageMetadata(status: .keep, stars: 3)
+        let discarded = ImageMetadata(status: .discard)
+        let fresh = ImageMetadata()
+        #expect(PhotoFilter.stars(3).matches(three) && !PhotoFilter.stars(4).matches(three))
+        #expect(PhotoFilter.unrated.matches(fresh) && !PhotoFilter.unrated.matches(three))
+        #expect(PhotoFilter.discarded.matches(discarded))
+        #expect(PhotoFilter.all.matches(discarded))
+        #expect(PhotoFilter.options(scale: 3).count == 6) // all, unrated, 3 stars, discarded
+    }
 }

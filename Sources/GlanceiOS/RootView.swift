@@ -46,9 +46,12 @@ struct AccessDeniedView: View {
     }
 }
 
-/// The only screen: the photo fills the display. Rating is a swipe on the photo itself
-/// (up = keep, down = discard) *and* a visible glass dock; left / right turns the page.
-/// Every control floats over the photo on Liquid Glass so it stays readable on any picture.
+/// The only screen: the photo fills the display and every control floats over it on Liquid Glass.
+///
+/// - left / right: previous / next photo
+/// - drag **up**: stars rise from the bottom; the star under the finger is the rating (release to set)
+/// - drag **down**: a trash can rises; drop the photo in to mark it discarded (nothing is deleted yet)
+/// The same actions are always available from the glass dock at the bottom.
 struct ViewerScreen: View {
     @EnvironmentObject private var store: LibraryStore
     @ObservedObject private var metadata = MetadataManager.shared
@@ -66,18 +69,21 @@ struct ViewerScreen: View {
     }
 
     @State private var chromeVisible = true
-    @State private var dragProgress: CGFloat = 0
+    @State private var dragOffset: CGFloat = 0
+    @State private var dragX: CGFloat = 0.5
+    @State private var fallToken = 0
     @State private var toast: LibraryStore.RatingEvent?
     @State private var gridMode: GridMode?
     @State private var compareRequest: CompareRequest?
+    @State private var showSettings = false
     @State private var confirmCleanup = false
-    @State private var confirmDeleteCurrent = false
     @AppStorage("autoAdvance") private var autoAdvance = true
+    @AppStorage("starScale") private var starScale = 5
     @AppStorage("didShowGestureGuide") private var didShowGuide = false
     @State private var showGuide = false
 
-    private var currentStatus: ImageStatus {
-        store.currentID.map { metadata.getMetadata(forKey: $0).status } ?? .undecided
+    private var currentMeta: ImageMetadata {
+        store.currentID.map { metadata.getMetadata(forKey: $0) } ?? ImageMetadata()
     }
 
     var body: some View {
@@ -89,14 +95,16 @@ struct ViewerScreen: View {
             } else {
                 ViewerPager(
                     onSingleTap: { toggleChrome() },
-                    onVerticalProgress: { dragProgress = $0 },
-                    onVerticalCommit: { direction in commit(direction == 1 ? .keep : .discard) }
+                    onVerticalDrag: { offset, x in dragOffset = offset; dragX = x },
+                    onVerticalCommit: { direction, x in commit(direction, x) },
+                    discardFallToken: fallToken
                 )
                 .ignoresSafeArea()
             }
 
             ratingBadge
-            dragHUD
+            starHUD
+            trashHUD
 
             VStack(spacing: 10) {
                 topControls
@@ -109,7 +117,7 @@ struct ViewerScreen: View {
             .allowsHitTesting(chromeVisible || store.visible.isEmpty)
 
             if showGuide {
-                GestureGuide { dismissGuide() }
+                GestureGuide(starScale: starScale) { dismissGuide() }
                     .transition(.opacity)
             }
         }
@@ -122,23 +130,22 @@ struct ViewerScreen: View {
         .fullScreenCover(item: $compareRequest) { request in
             CompareView(assetIDs: request.assetIDs)
         }
+        .sheet(isPresented: $showSettings) { SettingsSheet(onShowGuide: { withAnimation { showGuide = true } }) }
         .confirmationDialog(
-            "把 \(store.count(.discard)) 张丢弃的照片移到“最近删除”？",
+            "把 \(store.count(.discarded)) 张已丢弃的照片移到“最近删除”？",
             isPresented: $confirmCleanup,
             titleVisibility: .visible
         ) {
-            Button("清空丢弃的照片", role: .destructive) {
+            Button("删除这 \(store.count(.discarded)) 张照片", role: .destructive) {
                 Task { await store.delete(store.discardedAssets) }
             }
         } message: {
-            Text("照片会进入相册的“最近删除”，30 天内还可以恢复。")
-        }
-        .confirmationDialog("删除这张照片？", isPresented: $confirmDeleteCurrent, titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
-                if let asset = store.currentAsset { Task { await store.delete([asset]) } }
-            }
+            Text("照片会进入相册的“最近删除”，30 天内还可以恢复。系统还会再确认一次。")
         }
         .onChange(of: store.lastRating) { _, event in showToast(event) }
+        .onChange(of: starScale) { _, scale in
+            if case .stars(let n) = store.filter, n > scale { store.filter = .all }
+        }
         .task {
             if !didShowGuide { withAnimation { showGuide = true } }
         }
@@ -146,9 +153,22 @@ struct ViewerScreen: View {
 
     // MARK: - Rating
 
-    private func commit(_ status: ImageStatus) {
-        dragProgress = 0
-        store.rate(status, advance: autoAdvance)
+    private func starsFor(x: CGFloat) -> Int {
+        min(max(Int((x * CGFloat(starScale)).rounded(.up)), 1), starScale)
+    }
+
+    private func commit(_ direction: Int, _ x: CGFloat) {
+        dragOffset = 0
+        if direction > 0 {
+            store.rate(stars: starsFor(x: x), advance: autoAdvance)
+        } else {
+            // Let the photo drop into the trash first, then mark it.
+            fallToken += 1
+            Task {
+                try? await Task.sleep(nanoseconds: 230_000_000)
+                store.discard(advance: autoAdvance)
+            }
+        }
     }
 
     private func toggleChrome() {
@@ -182,7 +202,7 @@ struct ViewerScreen: View {
                     moreMenu
                 }
             }
-            filterBar
+            filterMenu
         }
         .foregroundStyle(.primary)
         .padding(.horizontal, 12)
@@ -235,19 +255,16 @@ struct ViewerScreen: View {
                     Label("选择照片对比…", systemImage: "rectangle.split.2x1")
                 }
             }
-            Toggle(isOn: $autoAdvance) { Label("标记后自动下一张", systemImage: "forward") }
+            Button(role: .destructive) { confirmCleanup = true } label: {
+                Label("清空已丢弃的照片 (\(store.count(.discarded)))…", systemImage: "trash.slash")
+            }
+            .disabled(store.count(.discarded) == 0)
+            Divider()
+            Button { showSettings = true } label: { Label("设置", systemImage: "gearshape") }
+                .accessibilityIdentifier("menu.settings")
             Button { withAnimation { showGuide = true } } label: {
                 Label("操作说明", systemImage: "hand.draw")
             }
-            Divider()
-            Button(role: .destructive) { confirmDeleteCurrent = true } label: {
-                Label("删除当前照片", systemImage: "trash")
-            }
-            .disabled(store.currentAsset == nil)
-            Button(role: .destructive) { confirmCleanup = true } label: {
-                Label("清空丢弃的照片 (\(store.count(.discard)))", systemImage: "trash.slash")
-            }
-            .disabled(store.count(.discard) == 0)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 17, weight: .medium))
@@ -260,37 +277,35 @@ struct ViewerScreen: View {
         .accessibilityIdentifier("top.more")
     }
 
-    /// 全部 / 保留 / 待定 / 丢弃 with counts: shows progress and filters the photos.
-    private var filterBar: some View {
-        HStack(spacing: 2) {
-            filterItem(.all, "全部")
-            filterItem(.keep, "保留")
-            filterItem(.undecided, "待定")
-            filterItem(.discard, "丢弃")
-        }
-        .padding(3)
-        .glassSurface(.capsule)
-    }
-
-    private func filterItem(_ filter: PhotoFilter, _ title: String) -> some View {
-        let selected = store.filter == filter
-        return Button {
-            store.filter = filter
-        } label: {
-            HStack(spacing: 4) {
-                Text(title)
-                Text("\(store.count(filter))").monospacedDigit().opacity(0.65)
+    /// Current filter with its count; opens the list of star levels, unrated and discarded.
+    private var filterMenu: some View {
+        Menu {
+            ForEach(PhotoFilter.options(scale: starScale)) { option in
+                Button {
+                    store.filter = option
+                } label: {
+                    Label("\(option.title)  \(store.count(option))",
+                          systemImage: option == store.filter ? "checkmark" : option.symbol)
+                }
+                .accessibilityIdentifier("filter.\(option.id)")
             }
-            .font(.system(size: 13, weight: selected ? .semibold : .regular))
-            .padding(.horizontal, 11)
-            .frame(minHeight: 32)
-            .background(selected ? GlancePalette.accent.opacity(0.28) : .clear, in: .capsule)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: store.filter.symbol).font(.system(size: 13))
+                Text(store.filter.title)
+                Text("\(store.count(store.filter))").monospacedDigit().opacity(0.65)
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
+            }
+            .font(.system(size: 14, weight: .medium))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 36)
             .contentShape(.capsule)
+            .glassSurface(.capsule, tint: store.filter == .all ? nil : GlancePalette.accent.opacity(0.55))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title) \(store.count(filter)) 张")
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("pill.\(filter.rawValue)")
+        .accessibilityLabel("按评分筛选")
+        .accessibilityValue("\(store.filter.title) \(store.count(store.filter)) 张")
+        .accessibilityIdentifier("filter.menu")
     }
 
     // MARK: - Overlays on the photo
@@ -298,15 +313,27 @@ struct ViewerScreen: View {
     /// Always-visible mark of the current photo's rating.
     private var ratingBadge: some View {
         VStack {
-            Spacer().frame(height: 118)
+            Spacer().frame(height: 126)
             HStack {
-                if currentStatus != .undecided {
-                    Label(currentStatus.title, systemImage: currentStatus == .keep ? "flag.fill" : "xmark")
+                if currentMeta.isDiscarded {
+                    Label("已丢弃", systemImage: "trash.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(currentStatus == .keep ? Color.green : Color.red, in: .capsule)
-                        .accessibilityIdentifier("badge.\(currentStatus.rawValue)")
+                        .background(Color.red, in: .capsule)
+                        .accessibilityIdentifier("badge.discarded")
+                } else if currentMeta.rating > 0 {
+                    HStack(spacing: 2) {
+                        ForEach(0..<currentMeta.rating, id: \.self) { _ in
+                            Image(systemName: "star.fill").font(.system(size: 12))
+                        }
+                    }
+                    .foregroundStyle(.black.opacity(0.85))
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Color.yellow, in: .capsule)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(currentMeta.rating) 星")
+                    .accessibilityIdentifier("badge.stars.\(currentMeta.rating)")
                 }
                 Spacer()
             }
@@ -316,21 +343,61 @@ struct ViewerScreen: View {
         .allowsHitTesting(false)
     }
 
-    /// Big icon that grows while a photo is being dragged: release to rate.
-    private var dragHUD: some View {
-        let strength = abs(dragProgress)
-        let keeps = dragProgress > 0
-        return VStack(spacing: 8) {
-            Image(systemName: keeps ? "flag.fill" : "xmark")
-                .font(.system(size: 44, weight: .semibold))
-            Text(strength >= 0.65 ? (keeps ? "松手保留" : "松手丢弃") : (keeps ? "保留" : "丢弃"))
-                .font(.system(size: 17, weight: .semibold))
+    /// Stars that rise while a photo is pulled up; the one under the finger sets the rating.
+    private var starHUD: some View {
+        let progress = min(max(dragOffset / 70, 0), 1)
+        let selected = starsFor(x: dragX)
+        return VStack(spacing: 14) {
+            HStack(spacing: 0) {
+                ForEach(1...starScale, id: \.self) { index in
+                    Image(systemName: index <= selected ? "star.fill" : "star")
+                        .font(.system(size: 38, weight: .semibold))
+                        .foregroundStyle(index <= selected ? Color.yellow : Color.white.opacity(0.85))
+                        .scaleEffect(index == selected ? 1.3 : 1)
+                        .frame(maxWidth: .infinity)
+                        .shadow(color: .black.opacity(0.35), radius: 4)
+                        .animation(.spring(duration: 0.18), value: selected)
+                }
+            }
+            .padding(.horizontal, 8)
+            Text("松手评 \(selected) 星")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(.black.opacity(0.55), in: .capsule)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 28).padding(.vertical, 22)
-        .background((keeps ? Color.green : Color.red).opacity(0.9), in: .rect(cornerRadius: 20))
-        .scaleEffect(0.7 + 0.5 * strength)
-        .opacity(Double(min(1, strength * 1.6)))
+        .offset(y: (1 - progress) * 60 - 90)
+        .opacity(Double(progress))
+        .sensoryFeedback(.selection, trigger: selected)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// A trash can that rises as the photo is pulled down; past the threshold it opens ("松手丢弃").
+    private var trashHUD: some View {
+        let progress = min(max(-dragOffset / 70, 0), 1)
+        let ready = progress >= 1
+        return VStack {
+            Spacer()
+            VStack(spacing: 8) {
+                Image(systemName: ready ? "trash.fill" : "trash")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 74, height: 74)
+                    .background(ready ? Color.red : Color.black.opacity(0.55), in: .circle)
+                    .scaleEffect(0.7 + 0.3 * progress + (ready ? 0.18 : 0))
+                    .animation(.spring(duration: 0.2), value: ready)
+                Text(ready ? "松手丢弃" : "继续下拉")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .background(.black.opacity(0.55), in: .capsule)
+            }
+            .offset(y: (1 - progress) * 140)
+            .opacity(Double(progress))
+            .padding(.bottom, 110)
+        }
+        .sensoryFeedback(.impact(weight: .medium), trigger: ready)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -339,8 +406,7 @@ struct ViewerScreen: View {
     private var toastView: some View {
         if let toast {
             HStack(spacing: 14) {
-                Text(toast.new == .undecided ? "已取消标记" : "已标为\(toast.new.title)")
-                    .font(.system(size: 14, weight: .medium))
+                Text(toast.message).font(.system(size: 14, weight: .medium))
                 Button("撤销") {
                     store.undoLastRating()
                     self.toast = nil
@@ -364,17 +430,49 @@ struct ViewerScreen: View {
         }
     }
 
-    // MARK: - Rating dock (always visible; swiping the photo does the same)
+    // MARK: - Dock: the same actions as the gestures, always visible
 
     private var ratingDock: some View {
         GlassGroup(spacing: 10) {
-            HStack(spacing: 6) {
-                dockButton(.discard, "丢弃", "xmark", tint: .red)
-                dockButton(.undecided, "待定", "questionmark", tint: .gray)
-                dockButton(.keep, "保留", "flag.fill", tint: .green)
-                Rectangle().fill(.secondary.opacity(0.35)).frame(width: 1, height: 28).padding(.horizontal, 2)
+            HStack(spacing: 2) {
+                Button { store.discard(advance: autoAdvance) } label: {
+                    Image(systemName: currentMeta.isDiscarded ? "trash.fill" : "trash")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(currentMeta.isDiscarded ? Color.white : Color.primary)
+                        .frame(width: 46, height: 46)
+                        .background(currentMeta.isDiscarded ? Color.red : .clear, in: .circle)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .disabled(store.currentID == nil)
+                .accessibilityLabel("丢弃")
+                .accessibilityAddTraits(currentMeta.isDiscarded ? .isSelected : [])
+                .accessibilityIdentifier("dock.discard")
+
+                Rectangle().fill(.secondary.opacity(0.35)).frame(width: 1, height: 26).padding(.horizontal, 4)
+
+                ForEach(1...starScale, id: \.self) { index in
+                    Button { store.rate(stars: index, advance: autoAdvance) } label: {
+                        Image(systemName: index <= currentMeta.rating ? "star.fill" : "star")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(index <= currentMeta.rating ? Color.yellow : Color.primary)
+                            .frame(width: starScale == 5 ? 38 : 46, height: 46)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.currentID == nil)
+                    .accessibilityLabel("\(index) 星")
+                    .accessibilityAddTraits(index == currentMeta.rating ? .isSelected : [])
+                    .accessibilityIdentifier("dock.star.\(index)")
+                }
+
+                Rectangle().fill(.secondary.opacity(0.35)).frame(width: 1, height: 26).padding(.horizontal, 4)
+
                 Button { gridMode = .pickForCompare } label: {
-                    dockLabel("对比", "rectangle.split.2x1", selected: false, tint: GlancePalette.accent)
+                    Image(systemName: "rectangle.split.2x1")
+                        .font(.system(size: 19, weight: .semibold))
+                        .frame(width: 46, height: 46)
+                        .contentShape(.circle)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.visible.count < 2)
@@ -382,38 +480,11 @@ struct ViewerScreen: View {
                 .accessibilityLabel("选择照片对比")
                 .accessibilityIdentifier("dock.compare")
             }
-            .padding(6)
+            .foregroundStyle(.primary)
+            .padding(5)
             .glassSurface(.capsule)
         }
-        .padding(.horizontal, 16)
-    }
-
-    private func dockButton(_ status: ImageStatus, _ title: String, _ symbol: String, tint: Color) -> some View {
-        let selected = currentStatus == status && status != .undecided
-        return Button {
-            commit(status)
-        } label: {
-            dockLabel(title, symbol, selected: selected, tint: tint)
-        }
-        .buttonStyle(.plain)
-        .disabled(store.currentID == nil)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("dock.\(status.rawValue)")
-        .sensoryFeedback(.selection, trigger: selected)
-    }
-
-    private func dockLabel(_ title: String, _ symbol: String, selected: Bool, tint: Color) -> some View {
-        VStack(spacing: 3) {
-            Image(systemName: symbol)
-                .font(.system(size: 18, weight: .semibold))
-                .frame(height: 22)
-            Text(title).font(.system(size: 12, weight: .medium))
-        }
-        .foregroundStyle(selected ? Color.white : Color.primary)
-        .frame(width: 62, height: 52)
-        .background(selected ? tint : .clear, in: .capsule)
-        .contentShape(.capsule)
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Hardware keyboard (iPad)
@@ -422,17 +493,57 @@ struct ViewerScreen: View {
         HStack {
             Button("", action: store.previous).keyboardShortcut(.leftArrow, modifiers: [])
             Button("", action: store.next).keyboardShortcut(.rightArrow, modifiers: [])
-            Button("") { commit(.discard) }.keyboardShortcut("1", modifiers: [])
-            Button("") { commit(.undecided) }.keyboardShortcut("2", modifiers: [])
-            Button("") { commit(.keep) }.keyboardShortcut("3", modifiers: [])
-            Button("") { commit(.discard) }.keyboardShortcut("x", modifiers: [])
-            Button("") { commit(.undecided) }.keyboardShortcut("u", modifiers: [])
-            Button("") { commit(.keep) }.keyboardShortcut("p", modifiers: [])
+            ForEach(1...5, id: \.self) { n in
+                Button("") { if n <= starScale { store.rate(stars: n, advance: autoAdvance) } }
+                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: [])
+            }
+            Button("") { store.discard(advance: autoAdvance) }.keyboardShortcut("x", modifiers: [])
+            Button("") { store.discard(advance: autoAdvance) }.keyboardShortcut(.delete, modifiers: [])
             Button("") { gridMode = .browse }.keyboardShortcut("g", modifiers: [])
             Button("") { gridMode = .pickForCompare }.keyboardShortcut("c", modifiers: [])
         }
         .opacity(0)
         .accessibilityHidden(true)
+    }
+}
+
+/// Settings: star scale, auto-advance, gesture guide.
+struct SettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("starScale") private var starScale = 5
+    @AppStorage("autoAdvance") private var autoAdvance = true
+    var onShowGuide: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("评分星级", selection: $starScale) {
+                        Text("3 星").tag(3)
+                        Text("5 星").tag(5)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("settings.starScale")
+                } header: {
+                    Text("评分")
+                } footer: {
+                    Text("上滑评分时，屏幕上会出现 3 颗或 5 颗星，手指停在哪颗就是几星。已经打过的星级不会丢。")
+                }
+                Section {
+                    Toggle("评分或丢弃后自动看下一张", isOn: $autoAdvance)
+                }
+                Section {
+                    Button("查看操作说明") {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onShowGuide() }
+                    }
+                }
+            }
+            .navigationTitle("设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+        .presentationDetents([.medium])
     }
 }
 

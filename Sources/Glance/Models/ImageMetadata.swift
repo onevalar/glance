@@ -8,23 +8,55 @@ public enum ImageStatus: String, Codable, Sendable {
     case keep
 }
 
-public enum PhotoFilter: String, CaseIterable, Identifiable, Sendable {
-    case all = "全部"
-    case keep = "保留"
-    case undecided = "待定"
-    case discard = "丢弃"
-    
-    public var id: String { self.rawValue }
-    
-    public var iconName: String {
+/// Which photos are shown: everything, unrated, one star level, or the discard pile.
+public enum PhotoFilter: Hashable, Identifiable, Sendable {
+    case all
+    case unrated
+    case stars(Int)
+    case discarded
+
+    public var id: String {
+        switch self {
+        case .all: return "all"
+        case .unrated: return "unrated"
+        case .stars(let n): return "stars\(n)"
+        case .discarded: return "discarded"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .all: return "全部"
+        case .unrated: return "未评分"
+        case .stars(let n): return "\(n) 星"
+        case .discarded: return "已丢弃"
+        }
+    }
+
+    public var symbol: String {
         switch self {
         case .all: return "photo.on.rectangle"
-        case .keep: return "flag.fill"
-        case .undecided: return "questionmark.circle"
-        case .discard: return "xmark.circle"
+        case .unrated: return "star.slash"
+        case .stars: return "star.fill"
+        case .discarded: return "trash"
+        }
+    }
+
+    /// Options offered for the chosen star scale (3 or 5), best rating first.
+    public static func options(scale: Int) -> [PhotoFilter] {
+        [.all, .unrated] + (1...max(1, min(scale, 5))).reversed().map { .stars($0) } + [.discarded]
+    }
+
+    public func matches(_ meta: ImageMetadata) -> Bool {
+        switch self {
+        case .all: return true
+        case .unrated: return meta.status == .undecided
+        case .stars(let n): return meta.rating == n
+        case .discarded: return meta.status == .discard
         }
     }
 }
+
 
 extension ImageStatus {
     /// Label used in the UI (matches the design: 丢弃 / 待定 / 保留).
@@ -37,13 +69,50 @@ extension ImageStatus {
     }
 }
 
+/// One photo's rating.
+/// - `status == .discard`: marked for removal (nothing is deleted until the user confirms).
+/// - `status == .keep`: rated with `stars` (1…5).
+/// - `status == .undecided`: not rated yet.
 public struct ImageMetadata: Codable, Equatable, Sendable {
     public var status: ImageStatus
+    /// 1…5 while `status == .keep`; 0 otherwise.
+    public var stars: Int
     public var cropRect: CGRect? // Normalized crop rectangle (values in 0.0...1.0)
-    
-    public init(status: ImageStatus = .undecided, cropRect: CGRect? = nil) {
+
+    public init(status: ImageStatus = .undecided, stars: Int? = nil, cropRect: CGRect? = nil) {
         self.status = status
+        self.stars = status == .keep ? min(max(stars ?? 5, 1), 5) : 0
         self.cropRect = cropRect
+    }
+
+    private enum CodingKeys: String, CodingKey { case status, stars, cropRect }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let status = try container.decodeIfPresent(ImageStatus.self, forKey: .status) ?? .undecided
+        // Files written before star ratings existed stored "keep" only: treat it as the top rating.
+        let stars = try container.decodeIfPresent(Int.self, forKey: .stars)
+        self.init(status: status, stars: stars, cropRect: try container.decodeIfPresent(CGRect.self, forKey: .cropRect))
+    }
+
+    /// Rating shown to the user: 0 (none), or 1…5.
+    public var rating: Int { status == .keep ? stars : 0 }
+
+    public var isDiscarded: Bool { status == .discard }
+
+    public mutating func setRating(_ value: Int) {
+        let clamped = min(max(value, 0), 5)
+        status = clamped == 0 ? .undecided : .keep
+        stars = clamped
+    }
+
+    public mutating func setDiscarded(_ discarded: Bool) {
+        if discarded {
+            status = .discard
+            stars = 0
+        } else if status == .discard {
+            status = .undecided
+        }
     }
 }
 

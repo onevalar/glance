@@ -20,6 +20,7 @@ struct GeneralSettingsPane: View {
     @AppStorage("glance.appearance") private var appearance = GlanceAppearance.system.rawValue
     @AppStorage("glance.autoHideControls") private var autoHideControls = true
     @AppStorage("glance.startup") private var startup = GlanceStartup.welcome.rawValue
+    @AppStorage("starScale") private var starScale = 5
 
     private var permissionDirs: [PermissionDir] {
         appState.dirs.map { PermissionDir(url: $0) }
@@ -35,6 +36,15 @@ struct GeneralSettingsPane: View {
                 }
                 .pickerStyle(.segmented)
                 Text("图片画布、缩略图、工具栏和信息面板会一起切换。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("评分") {
+                Picker("评分星级", selection: $starScale) {
+                    Text("3 星").tag(3)
+                    Text("5 星").tag(5)
+                }
+                .pickerStyle(.segmented)
+                Text("键盘 1–\(starScale) 打星，0 清除评分，X 放入丢弃箱。已经打过的星级不会丢。")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("专注浏览") {

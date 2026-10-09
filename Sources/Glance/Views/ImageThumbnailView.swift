@@ -16,8 +16,8 @@ struct ImageThumbnailView: View {
 
     @State private var thumbnail: NSImage?
 
-    private var status: ImageStatus {
-        metadataManager.getMetadata(for: imageURL).status
+    private var meta: ImageMetadata {
+        metadataManager.getMetadata(for: imageURL)
     }
 
     var body: some View {
@@ -35,7 +35,7 @@ struct ImageThumbnailView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 103)
             .clipShape(.rect(cornerRadius: 4))
-            .opacity(status == .discard ? 0.4 : 1)
+            .opacity(meta.isDiscarded ? 0.4 : 1)
 
             HStack(spacing: 8) {
                 Text(imageURL.lastPathComponent)
@@ -43,9 +43,7 @@ struct ImageThumbnailView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
-                Text(status.title)
-                    .foregroundStyle(status == .keep ? GlancePalette.foreground(colorScheme) : GlancePalette.muted(colorScheme))
-                    .fixedSize()
+                ratingLabel
             }
             .font(.system(size: 12))
         }
@@ -64,6 +62,23 @@ struct ImageThumbnailView: View {
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("open-image"))) { _ in
             // Rotation and crop post this after rewriting the file; reload so the sidebar follows.
             Task { thumbnail = await ThumbnailCache.thumbnail(for: imageURL, maxPixelSize: 480) }
+        }
+    }
+
+    /// ★★★ for rated photos, "已丢弃", or a quiet "未评分".
+    @ViewBuilder
+    private var ratingLabel: some View {
+        if meta.isDiscarded {
+            Text("已丢弃").foregroundStyle(Color.red).fixedSize()
+        } else if meta.rating > 0 {
+            HStack(spacing: 1) {
+                Image(systemName: "star.fill")
+                Text("\(meta.rating)").monospacedDigit()
+            }
+            .foregroundStyle(Color.yellow)
+            .fixedSize()
+        } else {
+            Text("未评分").foregroundStyle(GlancePalette.muted(colorScheme)).fixedSize()
         }
     }
 }
