@@ -18,6 +18,8 @@ struct CompareView: View {
     @State private var hub = CompareSyncHub()
     @State private var synced = true
     @State private var focusedID: String?
+    @AppStorage("didShowCompareHint") private var didShowHint = false
+    @State private var showHint = false
 
     private var assets: [PHAsset] { assetIDs.compactMap { store.asset(withID: $0) } }
 
@@ -27,40 +29,95 @@ struct CompareView: View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
                 layout(in: proxy.size)
-                    .padding(.top, 48)
+                    .padding(.top, 52)
                 topBar
+                if showHint {
+                    VStack {
+                        Spacer()
+                        compareHint
+                    }
+                    .padding(.bottom, 10)
+                    .transition(.opacity)
+                }
             }
         }
         .background(GlancePalette.canvas(scheme).ignoresSafeArea())
-        .onAppear { focusedID = assetIDs.first }
+        .onAppear {
+            focusedID = assetIDs.first
+            if !didShowHint { withAnimation { showHint = true } }
+        }
     }
 
     private var topBar: some View {
-        HStack {
-            Button { dismiss() } label: {
-                Image(systemName: "xmark").frame(width: 44, height: 44)
+        GlassGroup(spacing: 10) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(.circle)
+                        .glassSurface(.circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("关闭对比")
+                .accessibilityIdentifier("compare.close")
+                Spacer()
+                Text("对比 · \(assets.count) 张")
+                    .font(.system(size: 15, weight: .semibold))
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 44)
+                    .glassSurface(.capsule)
+                Spacer()
+                Button {
+                    synced.toggle()
+                    hub.isEnabled = synced
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: synced ? "link" : "link.badge.plus")
+                        Text(synced ? "同步" : "各自")
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(synced ? GlancePalette.accent : Color.primary)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 44)
+                    .contentShape(.capsule)
+                    .glassSurface(.capsule)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("同步缩放")
+                .accessibilityValue(synced ? "开启" : "关闭")
+                .accessibilityIdentifier("compare.sync")
             }
-            .accessibilityLabel("关闭对比")
-            .accessibilityIdentifier("compare.close")
-            Spacer()
-            Text("对比 · \(assets.count) 张").font(.system(size: 15, weight: .semibold))
-            Spacer()
-            Button {
-                synced.toggle()
-                hub.isEnabled = synced
-            } label: {
-                Image(systemName: synced ? "link" : "link.badge.plus")
-                    .foregroundStyle(synced ? GlancePalette.accent : GlancePalette.muted(scheme))
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("同步缩放")
-            .accessibilityValue(synced ? "开启" : "关闭")
         }
-        .foregroundStyle(GlancePalette.foreground(scheme))
-        .padding(.horizontal, 8)
-        .frame(height: 48)
-        .background(GlancePalette.surface(scheme))
-        .background(alignment: .top) { GlancePalette.surface(scheme).ignoresSafeArea(edges: .top) }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 12)
+        .padding(.top, 2)
+        .padding(.bottom, 2)
+    }
+
+    /// One-time explanation of what this screen can do.
+    private var compareHint: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("两指张开放大任意一张，其他几张会一起移到同一处", systemImage: "hand.pinch")
+            Label("点每张下面的“丢弃 / 保留”直接打分", systemImage: "flag")
+            Label("右上角“同步”可以改成各看各的", systemImage: "link")
+            Button("知道了") {
+                didShowHint = true
+                withAnimation { showHint = false }
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(GlancePalette.accent)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityIdentifier("compare.hint.ok")
+        }
+        .font(.system(size: 13))
+        .padding(16)
+        // Solid surface instead of glass: this is text that must stay readable on any photo.
+        .background(GlancePalette.surface(scheme), in: .rect(cornerRadius: 24))
+        .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(GlancePalette.fieldBorder(scheme), lineWidth: 1) }
+        .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder
@@ -126,9 +183,9 @@ private struct CompareCell: View {
             VStack {
                 HStack {
                     Text(store.displayName(of: asset))
-                        .font(.system(size: 12))
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(.regularMaterial, in: .capsule)
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .glassSurface(.capsule)
                     Spacer()
                 }
                 Spacer()
@@ -154,11 +211,12 @@ private struct CompareCell: View {
         } label: {
             Text(on ? (target == .keep ? "已保留" : "已丢弃") : title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(on ? .white : GlancePalette.secondary(scheme))
-                .padding(.horizontal, 14)
-                .frame(minHeight: 36)
-                .background(on ? (target == .keep ? Color.green : Color.red).opacity(0.9) : Color.clear, in: .capsule)
-                .background(.regularMaterial, in: .capsule)
+                .foregroundStyle(on ? Color.white : Color.primary)
+                .padding(.horizontal, 16)
+                .frame(minHeight: 40)
+                .background(on ? (target == .keep ? Color.green : Color.red) : Color.clear, in: .capsule)
+                .contentShape(.capsule)
+                .glassSurface(.capsule)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("compare.\(target.rawValue).\(asset.localIdentifier)")

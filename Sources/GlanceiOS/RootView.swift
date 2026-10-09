@@ -46,8 +46,9 @@ struct AccessDeniedView: View {
     }
 }
 
-/// The only screen: the photo fills the display. Rating is done by swiping the photo itself
-/// (up = keep, down = discard), left / right turns the page, and the controls float over the photo.
+/// The only screen: the photo fills the display. Rating is a swipe on the photo itself
+/// (up = keep, down = discard) *and* a visible glass dock; left / right turns the page.
+/// Every control floats over the photo on Liquid Glass so it stays readable on any picture.
 struct ViewerScreen: View {
     @EnvironmentObject private var store: LibraryStore
     @ObservedObject private var metadata = MetadataManager.shared
@@ -59,16 +60,25 @@ struct ViewerScreen: View {
         let assetIDs: [String]
     }
 
+    enum GridMode: String, Identifiable {
+        case browse, pickForCompare
+        var id: String { rawValue }
+    }
+
     @State private var chromeVisible = true
     @State private var dragProgress: CGFloat = 0
     @State private var toast: LibraryStore.RatingEvent?
-    @State private var showGrid = false
+    @State private var gridMode: GridMode?
     @State private var compareRequest: CompareRequest?
     @State private var confirmCleanup = false
     @State private var confirmDeleteCurrent = false
     @AppStorage("autoAdvance") private var autoAdvance = true
     @AppStorage("didShowGestureGuide") private var didShowGuide = false
     @State private var showGuide = false
+
+    private var currentStatus: ImageStatus {
+        store.currentID.map { metadata.getMetadata(forKey: $0).status } ?? .undecided
+    }
 
     var body: some View {
         ZStack {
@@ -88,12 +98,13 @@ struct ViewerScreen: View {
             ratingBadge
             dragHUD
 
-            VStack(spacing: 0) {
-                topBar
+            VStack(spacing: 10) {
+                topControls
                 Spacer(minLength: 0)
                 toastView
-                statusPill
+                ratingDock
             }
+            .padding(.bottom, 6)
             .opacity(chromeVisible || store.visible.isEmpty ? 1 : 0)
             .allowsHitTesting(chromeVisible || store.visible.isEmpty)
 
@@ -103,8 +114,10 @@ struct ViewerScreen: View {
             }
         }
         .background { keyboardShortcuts }
-        .fullScreenCover(isPresented: $showGrid) {
-            PhotoGridView { ids in compareRequest = CompareRequest(assetIDs: ids) }
+        .fullScreenCover(item: $gridMode) { mode in
+            PhotoGridView(pickForCompare: mode == .pickForCompare) { ids in
+                compareRequest = CompareRequest(assetIDs: ids)
+            }
         }
         .fullScreenCover(item: $compareRequest) { request in
             CompareView(assetIDs: request.assetIDs)
@@ -147,33 +160,33 @@ struct ViewerScreen: View {
         withAnimation { showGuide = false }
     }
 
-    // MARK: - Top bar
+    // MARK: - Top controls (glass)
 
-    private var topBar: some View {
-        HStack(spacing: 8) {
-            albumMenu
-            Spacer(minLength: 8)
-            counter
-            Spacer(minLength: 8)
-            Button { showGrid = true } label: {
-                Image(systemName: "square.grid.2x2").frame(width: 44, height: 44)
+    private var topControls: some View {
+        VStack(spacing: 8) {
+            GlassGroup(spacing: 10) {
+                HStack(spacing: 10) {
+                    albumMenu
+                    counter
+                    Spacer(minLength: 0)
+                    Button { gridMode = .browse } label: {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 17, weight: .medium))
+                            .frame(width: 44, height: 44)
+                            .contentShape(.circle)
+                            .glassSurface(.circle)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("网格")
+                    .accessibilityIdentifier("top.grid")
+                    moreMenu
+                }
             }
-            .accessibilityLabel("网格")
-            .accessibilityIdentifier("top.grid")
-            moreMenu
+            filterBar
         }
-        .font(.system(size: 17))
-        .foregroundStyle(GlancePalette.foreground(scheme))
+        .foregroundStyle(.primary)
         .padding(.horizontal, 12)
         .padding(.top, 4)
-        .padding(.bottom, 4)
-        .background(alignment: .top) {
-            LinearGradient(
-                colors: [GlancePalette.canvas(scheme).opacity(0.92), GlancePalette.canvas(scheme).opacity(0)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
-        }
     }
 
     private var albumMenu: some View {
@@ -186,13 +199,17 @@ struct ViewerScreen: View {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Text(store.selectedAlbum?.title ?? "全部照片").lineLimit(1)
                 Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
             }
+            .font(.system(size: 15, weight: .medium))
+            .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .contentShape(.rect)
+            .contentShape(.capsule)
+            .glassSurface(.capsule)
         }
+        .buttonStyle(.plain)
         .accessibilityLabel("切换相册")
         .accessibilityValue(store.selectedAlbum?.title ?? "全部照片")
     }
@@ -202,18 +219,20 @@ struct ViewerScreen: View {
             if let index = store.currentIndex {
                 Text(String(format: "%02d / %d", index + 1, store.visible.count))
                     .monospacedDigit()
+                    .font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 32)
+                    .glassSurface(.capsule)
             }
         }
-        .font(.system(size: 13))
-        .foregroundStyle(GlancePalette.muted(scheme))
         .accessibilityIdentifier("top.counter")
     }
 
     private var moreMenu: some View {
         Menu {
             if store.visible.count > 1 {
-                Button { compareWithNext() } label: {
-                    Label("对比当前与下一张", systemImage: "rectangle.split.2x1")
+                Button { gridMode = .pickForCompare } label: {
+                    Label("选择照片对比…", systemImage: "rectangle.split.2x1")
                 }
             }
             Toggle(isOn: $autoAdvance) { Label("标记后自动下一张", systemImage: "forward") }
@@ -230,37 +249,68 @@ struct ViewerScreen: View {
             }
             .disabled(store.count(.discard) == 0)
         } label: {
-            Image(systemName: "ellipsis").frame(width: 44, height: 44)
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .medium))
+                .frame(width: 44, height: 44)
+                .contentShape(.circle)
+                .glassSurface(.circle)
         }
+        .buttonStyle(.plain)
         .accessibilityLabel("更多")
         .accessibilityIdentifier("top.more")
     }
 
-    private func compareWithNext() {
-        guard let index = store.currentIndex, store.visible.count > 1 else { return }
-        let other = index + 1 < store.visible.count ? index + 1 : index - 1
-        compareRequest = CompareRequest(assetIDs: [store.visible[index].localIdentifier, store.visible[other].localIdentifier])
+    /// 全部 / 保留 / 待定 / 丢弃 with counts: shows progress and filters the photos.
+    private var filterBar: some View {
+        HStack(spacing: 2) {
+            filterItem(.all, "全部")
+            filterItem(.keep, "保留")
+            filterItem(.undecided, "待定")
+            filterItem(.discard, "丢弃")
+        }
+        .padding(3)
+        .glassSurface(.capsule)
+    }
+
+    private func filterItem(_ filter: PhotoFilter, _ title: String) -> some View {
+        let selected = store.filter == filter
+        return Button {
+            store.filter = filter
+        } label: {
+            HStack(spacing: 4) {
+                Text(title)
+                Text("\(store.count(filter))").monospacedDigit().opacity(0.65)
+            }
+            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+            .padding(.horizontal, 11)
+            .frame(minHeight: 32)
+            .background(selected ? GlancePalette.accent.opacity(0.28) : .clear, in: .capsule)
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title) \(store.count(filter)) 张")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("pill.\(filter.rawValue)")
     }
 
     // MARK: - Overlays on the photo
 
-    /// Always-visible mark of the current photo's rating, so the result of a swipe can be seen at a glance.
+    /// Always-visible mark of the current photo's rating.
     private var ratingBadge: some View {
-        let status = store.currentID.map { metadata.getMetadata(forKey: $0).status } ?? .undecided
-        return VStack {
+        VStack {
+            Spacer().frame(height: 118)
             HStack {
-                if status != .undecided {
-                    Label(status.title, systemImage: status == .keep ? "flag.fill" : "xmark")
+                if currentStatus != .undecided {
+                    Label(currentStatus.title, systemImage: currentStatus == .keep ? "flag.fill" : "xmark")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(status == .keep ? Color.green.opacity(0.9) : Color.red.opacity(0.9), in: .capsule)
-                        .accessibilityIdentifier("badge.\(status.rawValue)")
+                        .background(currentStatus == .keep ? Color.green : Color.red, in: .capsule)
+                        .accessibilityIdentifier("badge.\(currentStatus.rawValue)")
                 }
                 Spacer()
             }
             .padding(.leading, 16)
-            .padding(.top, 56)
             Spacer()
         }
         .allowsHitTesting(false)
@@ -278,7 +328,7 @@ struct ViewerScreen: View {
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 28).padding(.vertical, 22)
-        .background((keeps ? Color.green : Color.red).opacity(0.85), in: .rect(cornerRadius: 20))
+        .background((keeps ? Color.green : Color.red).opacity(0.9), in: .rect(cornerRadius: 20))
         .scaleEffect(0.7 + 0.5 * strength)
         .opacity(Double(min(1, strength * 1.6)))
         .allowsHitTesting(false)
@@ -299,9 +349,8 @@ struct ViewerScreen: View {
                 .foregroundStyle(GlancePalette.accent)
                 .accessibilityIdentifier("toast.undo")
             }
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            .background(.regularMaterial, in: .capsule)
-            .padding(.bottom, 10)
+            .padding(.horizontal, 18).padding(.vertical, 11)
+            .glassSurface(.capsule)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
@@ -315,41 +364,56 @@ struct ViewerScreen: View {
         }
     }
 
-    // MARK: - Bottom: rating counts double as the filter
+    // MARK: - Rating dock (always visible; swiping the photo does the same)
 
-    private var statusPill: some View {
-        HStack(spacing: 4) {
-            pillItem(.all, title: "全部")
-            pillItem(.keep, title: "保留")
-            pillItem(.undecided, title: "待定")
-            pillItem(.discard, title: "丢弃")
+    private var ratingDock: some View {
+        GlassGroup(spacing: 10) {
+            HStack(spacing: 6) {
+                dockButton(.discard, "丢弃", "xmark", tint: .red)
+                dockButton(.undecided, "待定", "questionmark", tint: .gray)
+                dockButton(.keep, "保留", "flag.fill", tint: .green)
+                Rectangle().fill(.secondary.opacity(0.35)).frame(width: 1, height: 28).padding(.horizontal, 2)
+                Button { gridMode = .pickForCompare } label: {
+                    dockLabel("对比", "rectangle.split.2x1", selected: false, tint: GlancePalette.accent)
+                }
+                .buttonStyle(.plain)
+                .disabled(store.visible.count < 2)
+                .opacity(store.visible.count < 2 ? 0.4 : 1)
+                .accessibilityLabel("选择照片对比")
+                .accessibilityIdentifier("dock.compare")
+            }
+            .padding(6)
+            .glassSurface(.capsule)
         }
-        .padding(4)
-        .background(.regularMaterial, in: .capsule)
-        .padding(.bottom, 10)
         .padding(.horizontal, 16)
     }
 
-    private func pillItem(_ filter: PhotoFilter, title: String) -> some View {
-        let selected = store.filter == filter
+    private func dockButton(_ status: ImageStatus, _ title: String, _ symbol: String, tint: Color) -> some View {
+        let selected = currentStatus == status && status != .undecided
         return Button {
-            store.filter = filter
+            commit(status)
         } label: {
-            HStack(spacing: 4) {
-                Text(title)
-                Text("\(store.count(filter))").monospacedDigit().foregroundStyle(GlancePalette.muted(scheme))
-            }
-            .font(.system(size: 13, weight: selected ? .semibold : .regular))
-            .foregroundStyle(selected ? GlancePalette.accent : GlancePalette.secondary(scheme))
-            .padding(.horizontal, 12)
-            .frame(minHeight: 36)
-            .background(selected ? GlancePalette.accentSoft(scheme) : .clear, in: .capsule)
-            .contentShape(.capsule)
+            dockLabel(title, symbol, selected: selected, tint: tint)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title) \(store.count(filter)) 张")
+        .disabled(store.currentID == nil)
+        .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("pill.\(filter.rawValue)")
+        .accessibilityIdentifier("dock.\(status.rawValue)")
+        .sensoryFeedback(.selection, trigger: selected)
+    }
+
+    private func dockLabel(_ title: String, _ symbol: String, selected: Bool, tint: Color) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .semibold))
+                .frame(height: 22)
+            Text(title).font(.system(size: 12, weight: .medium))
+        }
+        .foregroundStyle(selected ? Color.white : Color.primary)
+        .frame(width: 62, height: 52)
+        .background(selected ? tint : .clear, in: .capsule)
+        .contentShape(.capsule)
     }
 
     // MARK: - Hardware keyboard (iPad)
@@ -364,7 +428,8 @@ struct ViewerScreen: View {
             Button("") { commit(.discard) }.keyboardShortcut("x", modifiers: [])
             Button("") { commit(.undecided) }.keyboardShortcut("u", modifiers: [])
             Button("") { commit(.keep) }.keyboardShortcut("p", modifiers: [])
-            Button("") { showGrid = true }.keyboardShortcut("g", modifiers: [])
+            Button("") { gridMode = .browse }.keyboardShortcut("g", modifiers: [])
+            Button("") { gridMode = .pickForCompare }.keyboardShortcut("c", modifiers: [])
         }
         .opacity(0)
         .accessibilityHidden(true)

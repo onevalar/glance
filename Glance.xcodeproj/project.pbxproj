@@ -21,6 +21,7 @@
 		37ABD0879C04663FB5816C51 /* CompareSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C646B70E96C1F107AE65C2B8 /* CompareSession.swift */; };
 		3B06F20FFCFF0882893EAEAC /* ToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F52335F6F978B8B64780E111 /* ToolbarView.swift */; };
 		3B3FDDBCF0EC3F28A72A473C /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C841AE4CD2C2327AA89DC78 /* LibraryStore.swift */; };
+		3B60D4D7EF2B51FEAB44DB92 /* GlanceGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0F5CF7F660A45823B372C73 /* GlanceGlass.swift */; };
 		42C10AC32FCBF42D1B631C29 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5CBB1DC136F4AD73C629F084 /* Localizable.xcstrings */; };
 		44EA53C748970BDC3DDBBF8E /* ViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CD1BAFE7871F4361C512921 /* ViewerView.swift */; };
 		4647F582C17C1D678C923513 /* ImageRotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */; };
@@ -119,6 +120,7 @@
 		8EEFBBB5B4B0C4B08F2C8CAE /* GestureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureTests.swift; sourceTree = "<group>"; };
 		9BD3388B93B45FD6C73CB60C /* ImageRotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRotatorTests.swift; sourceTree = "<group>"; };
 		9EAED5BAAD1D618BC5856BEF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A0F5CF7F660A45823B372C73 /* GlanceGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceGlass.swift; sourceTree = "<group>"; };
 		A1691AE19E06BB4AEF5B17F6 /* PhotoImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoImageLoader.swift; sourceTree = "<group>"; };
 		A6D076362BB14692174F2823 /* BrowsingSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowsingSessionTests.swift; sourceTree = "<group>"; };
 		ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceiOSApp.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				2F048264EA1BA039D935F7F2 /* Assets.xcassets */,
 				C325A540120FB3D78765D622 /* CompareView.swift */,
 				34C6967F1FAD615791FC4501 /* GestureGuide.swift */,
+				A0F5CF7F660A45823B372C73 /* GlanceGlass.swift */,
 				ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */,
 				1596A9F8D816B3B482AF3903 /* Info.plist */,
 				2C841AE4CD2C2327AA89DC78 /* LibraryStore.swift */,
@@ -525,6 +528,7 @@
 				CBEB9A79190BD84469DE1CEC /* CompareView.swift in Sources */,
 				AD9A914E01451D39348A909E /* GestureGuide.swift in Sources */,
 				A063EF13E00171E82E09A8B7 /* GlanceAppearance.swift in Sources */,
+				3B60D4D7EF2B51FEAB44DB92 /* GlanceGlass.swift in Sources */,
 				34DF0FA369FCADB0B140618D /* GlanceiOSApp.swift in Sources */,
 				9EE8ADBEAA12A0EEA275185E /* ImageMetadata.swift in Sources */,
 				3B3FDDBCF0EC3F28A72A473C /* LibraryStore.swift in Sources */,

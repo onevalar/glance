@@ -20,11 +20,11 @@ struct GestureGuide: View {
                     .font(.system(size: 24, weight: .semibold))
                     .padding(.bottom, 4)
 
-                row("arrow.up", .green, "上滑", "保留这张")
-                row("arrow.down", .red, "下滑", "丢弃这张")
+                row("arrow.up", .green, "上滑，或点底部“保留”", "保留这张")
+                row("arrow.down", .red, "下滑，或点底部“丢弃”", "丢弃这张")
                 row("arrow.left.and.right", .white, "左右滑动", "切换照片")
                 row("plus.magnifyingglass", .white, "双击或双指张开", "放大看细节")
-                row("square.grid.2x2", .white, "右上角网格", "多选照片，并排对比")
+                row("rectangle.split.2x1", .white, "底部“对比”", "选 2–4 张相似的照片，并排放大对比")
 
                 Text("标错了？再滑一次同方向取消，或点提示条上的“撤销”。")
                     .font(.system(size: 13))

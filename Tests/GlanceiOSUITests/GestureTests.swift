@@ -9,7 +9,7 @@ final class GestureTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-didShowGestureGuide", "YES", "-resetRatings", "YES"]
+        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-didShowGestureGuide", "YES", "-resetRatings", "YES", "-didShowCompareHint", "NO"]
         addUIInterruptionMonitor(withDescription: "Photos permission") { alert in
             for label in ["允许完全访问", "Allow Full Access"] where alert.buttons[label].exists {
                 alert.buttons[label].tap()
@@ -57,19 +57,40 @@ final class GestureTests: XCTestCase {
         XCTAssertFalse(element("badge.discard").waitForExistence(timeout: 2), "undo removes the discard mark")
     }
 
-    func testGridSelectionAndCompare() throws {
+    func testDockButtonsRate() throws {
+        shot("10-dock")
+        element("dock.keep").tap()
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), "dock rating shows the undo toast")
+        pager.swipeRight()
+        XCTAssertTrue(element("badge.keep").waitForExistence(timeout: 3), "the photo now carries the keep badge")
+    }
+
+    func testBrowseGrid() throws {
         element("top.grid").tap()
+        sleep(1)
         shot("04a-grid")
-        XCTAssertTrue(element("grid.select").waitForExistence(timeout: 3))
-        element("grid.select").tap()
+        XCTAssertTrue(app.buttons["选择"].waitForExistence(timeout: 3), "browse grid offers 选择")
+        shot("04a-grid")
+        app.buttons["完成"].tap()
+        XCTAssertTrue(pager.waitForExistence(timeout: 5))
+    }
+
+    func testCompareFromDock() throws {
+        element("dock.compare").tap()
+        XCTAssertTrue(element("grid.compare").waitForExistence(timeout: 5), "picker opens with the compare button")
         let cells = app.otherElements.matching(NSPredicate(format: "label BEGINSWITH '照片'"))
         XCTAssertGreaterThanOrEqual(cells.count, 2)
-        cells.element(boundBy: 0).tap()
+        XCTAssertFalse(element("grid.compare").isEnabled, "needs two photos before it starts")
+        shot("04-picker-start")
         cells.element(boundBy: 1).tap()
-        shot("04-grid-selected")
+        XCTAssertTrue(element("grid.compare").isEnabled, "two photos selected → can compare")
+        shot("04b-picker-two")
         element("grid.compare").tap()
         XCTAssertTrue(element("compare.close").waitForExistence(timeout: 5), "comparison opens")
-        sleep(2)
+        XCTAssertTrue(element("compare.hint.ok").waitForExistence(timeout: 3), "first-use hint explains the screen")
+        shot("05-compare-hint")
+        element("compare.hint.ok").tap()
+        sleep(1)
         shot("05-compare")
         element("compare.close").tap()
         XCTAssertTrue(pager.waitForExistence(timeout: 5))
@@ -93,5 +114,12 @@ final class GestureTests: XCTestCase {
         element("guide.start").tap()
         XCTAssertTrue(pager.waitForExistence(timeout: 5))
         XCTAssertFalse(element("guide.start").exists)
+    }
+
+    /// Reaches a real photo and captures the glass controls over it.
+    func testGlassOverRealPhoto() throws {
+        for _ in 0..<5 { pager.swipeLeft() }
+        sleep(2)
+        shot("11-over-photo-\(ProcessInfo.processInfo.environment["GLANCE_UITEST_TAG"] ?? "x")")
     }
 }
