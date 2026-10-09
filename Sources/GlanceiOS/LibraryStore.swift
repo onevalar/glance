@@ -8,6 +8,15 @@ import SwiftUI
 
 /// Photo-library state for the culling flow: which photos are shown, which one is current,
 /// and the keep / undecided / discard rating of each (stored by photo identifier).
+/// A place photos can be browsed from: the whole library, a smart album or one of the user's albums.
+struct AlbumChoice: Identifiable, Equatable {
+    static let allPhotosID = "all"
+    let id: String
+    let title: String
+    let count: Int
+    let symbol: String
+}
+
 @MainActor
 final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserver {
     enum Access {
@@ -27,6 +36,8 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         didSet { if filter != oldValue { rebuild(preferIndex: currentIndex) } }
     }
     @Published private(set) var totalCount = 0
+    @Published private(set) var albums: [AlbumChoice] = []
+    @Published private(set) var selectedAlbumID = AlbumChoice.allPhotosID
 
     let metadata = MetadataManager.shared
     private var allAssets: [PHAsset] = []
@@ -76,12 +87,76 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
     }
 
     private func reload() {
-        let options = PHFetchOptions()
-        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        let result = PHAsset.fetchAssets(with: .image, options: options)
-        allAssets = result.objects(at: IndexSet(integersIn: 0..<result.count))
+        loadAlbums()
+        allAssets = fetchAssets(inAlbum: selectedAlbumID)
         totalCount = allAssets.count
         rebuild(preferIndex: currentIndex)
+    }
+
+    private func imageOptions() -> PHFetchOptions {
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
+        return options
+    }
+
+    private func fetchAssets(inAlbum id: String) -> [PHAsset] {
+        let result: PHFetchResult<PHAsset>
+        if id != AlbumChoice.allPhotosID,
+           let collection = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [id], options: nil).firstObject {
+            result = PHAsset.fetchAssets(in: collection, options: imageOptions())
+        } else {
+            result = PHAsset.fetchAssets(with: imageOptions())
+        }
+        return result.objects(at: IndexSet(integersIn: 0..<result.count))
+    }
+
+    private func loadAlbums() {
+        var choices = [AlbumChoice(
+            id: AlbumChoice.allPhotosID, title: "全部照片",
+            count: PHAsset.fetchAssets(with: imageOptions()).count, symbol: "photo.on.rectangle"
+        )]
+
+        let smart: [(PHAssetCollectionSubtype, String, String)] = [
+            (.smartAlbumFavorites, "个人收藏", "heart"),
+            (.smartAlbumScreenshots, "截屏", "camera.viewfinder"),
+            (.smartAlbumSelfPortraits, "自拍", "person.crop.square"),
+            (.smartAlbumRecentlyAdded, "最近添加", "clock"),
+        ]
+        for (subtype, title, symbol) in smart {
+            if let collection = PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: subtype, options: nil).firstObject {
+                let count = PHAsset.fetchAssets(in: collection, options: imageOptions()).count
+                if count > 0 { choices.append(AlbumChoice(id: collection.localIdentifier, title: title, count: count, symbol: symbol)) }
+            }
+        }
+
+        let user = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: nil)
+        user.enumerateObjects { collection, _, _ in
+            let count = PHAsset.fetchAssets(in: collection, options: self.imageOptions()).count
+            if count > 0 {
+                choices.append(AlbumChoice(
+                    id: collection.localIdentifier, title: collection.localizedTitle ?? "未命名相册",
+                    count: count, symbol: "rectangle.stack"
+                ))
+            }
+        }
+        albums = choices
+        if !choices.contains(where: { $0.id == selectedAlbumID }) { selectedAlbumID = AlbumChoice.allPhotosID }
+    }
+
+    var selectedAlbum: AlbumChoice? { albums.first { $0.id == selectedAlbumID } }
+
+    func selectAlbum(_ album: AlbumChoice) {
+        guard album.id != selectedAlbumID else { return }
+        selectedAlbumID = album.id
+        currentID = nil
+        reload()
+    }
+
+    /// File name without extension, e.g. "IMG_0421" — shown next to the position counter.
+    func displayName(of asset: PHAsset) -> String {
+        guard let name = PHAssetResource.assetResources(for: asset).first?.originalFilename else { return "" }
+        return (name as NSString).deletingPathExtension
     }
 
     /// Recomputes the visible list. Keeps the current photo if it is still shown,

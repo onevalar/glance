@@ -34,17 +34,14 @@ struct RatingBar: View {
         return Button {
             store.rate(status, advance: autoAdvance)
         } label: {
-            Label(title, systemImage: icon)
-                .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 6)
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .foregroundStyle(status == .keep ? (isOn ? .white : GlancePalette.accent) : .primary)
-                .background(status == .keep ? (isOn ? GlancePalette.accent : GlancePalette.accentSoft(scheme))
-                            : GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
+                .foregroundStyle(GlancePalette.secondary(scheme))
+                .background(isOn ? GlancePalette.accentSoft(scheme) : GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(isOn ? GlancePalette.accent : GlancePalette.border(scheme), lineWidth: isOn ? 1.5 : 0.5)
+                        .strokeBorder(isOn ? GlancePalette.accent : GlancePalette.fieldBorder(scheme), lineWidth: isOn ? 1.5 : 1)
                 }
         }
         .buttonStyle(.plain)

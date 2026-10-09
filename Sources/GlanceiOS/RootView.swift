@@ -85,12 +85,11 @@ struct ViewerScreen: View {
     @EnvironmentObject private var store: LibraryStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.verticalSizeClass) private var heightClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Binding var showColumn: Bool
 
     @State private var chromeVisible = true
+    @State private var showAlbums = false
     @State private var confirmCleanup = false
     @State private var confirmDeleteCurrent = false
     @AppStorage("autoAdvance") private var autoAdvance = true
@@ -100,23 +99,33 @@ struct ViewerScreen: View {
             GlancePalette.canvas(scheme).ignoresSafeArea()
 
             VStack(spacing: 0) {
-                topBar
+                navigationBar
                     .opacity(chromeVisible || store.visible.isEmpty ? 1 : 0)
                     .allowsHitTesting(chromeVisible || store.visible.isEmpty)
                 if store.visible.isEmpty {
                     EmptyFilterView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ViewerPager(onSingleTap: {
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { chromeVisible.toggle() }
-                    })
+                    caption
+                    pager
+                    Text("左右切换图片 · 双指缩放")
+                        .font(.system(size: 12))
+                        .foregroundStyle(GlancePalette.muted(scheme))
+                        .padding(.vertical, 12)
+                        .opacity(chromeVisible ? 1 : 0)
+                    if sizeClass == .compact { Spacer(minLength: 0) }
                 }
-                bottomBar
+                RatingBar()
+                    .frame(maxWidth: 560)
+                    .padding(.horizontal, 20)
+                    .padding(.top, store.visible.isEmpty ? 12 : 4)
+                    .padding(.bottom, 12)
                     .opacity(chromeVisible || store.visible.isEmpty ? 1 : 0)
                     .allowsHitTesting(chromeVisible || store.visible.isEmpty)
             }
         }
         .background { arrowKeys }
+        .sheet(isPresented: $showAlbums) { AlbumSheet() }
         .confirmationDialog(
             "把 \(store.discardedAssets.count) 张丢弃的照片移到“最近删除”？",
             isPresented: $confirmCleanup,
@@ -135,79 +144,65 @@ struct ViewerScreen: View {
         }
     }
 
-    // MARK: - Chrome
+    /// On iPhone the photo sits in a fixed 390×460 zone under the caption (Paper), not centred in all free space.
+    @ViewBuilder
+    private var pager: some View {
+        let pager = ViewerPager(onSingleTap: {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { chromeVisible.toggle() }
+        })
+        if sizeClass == .compact {
+            pager.frame(maxWidth: .infinity).aspectRatio(390.0 / 460.0, contentMode: .fit)
+        } else {
+            pager
+        }
+    }
 
-    private var topBar: some View {
-        HStack(spacing: 10) {
-            if sizeClass == .regular {
-                Button {
-                    showColumn.toggle()
-                } label: {
-                    Image(systemName: "sidebar.leading")
-                        .frame(width: 44, height: 44)
+    // MARK: - Navigation bar (Paper: ‹ 相册 · 过目 · 筛选)
+
+    private var navigationBar: some View {
+        ZStack {
+            Text("过目")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(GlancePalette.foreground(scheme))
+
+            HStack(spacing: 4) {
+                if sizeClass == .regular {
+                    Button { showColumn.toggle() } label: {
+                        Image(systemName: "sidebar.leading").frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("显示或隐藏缩略图")
+                }
+                Button { showAlbums = true } label: {
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold))
+                        Text("相册").font(.system(size: 17))
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .background(GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
-                .accessibilityLabel("显示或隐藏缩略图")
+                .accessibilityLabel("选择相册")
+                .accessibilityValue(store.selectedAlbum?.title ?? "全部照片")
+
+                Spacer(minLength: 8)
+                filterMenu
             }
-
-            filterMenu
-
-            Spacer(minLength: 0)
-
-            positionLabel
-
-            Spacer(minLength: 0)
-
-            moreMenu
+            .foregroundStyle(GlancePalette.foreground(scheme))
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .padding(.bottom, 8)
-        .background(GlancePalette.canvas(scheme))
+        .padding(.horizontal, 16)
+        .frame(minHeight: 52)
     }
 
     private var filterMenu: some View {
         Menu {
             Picker("筛选", selection: $store.filter) {
                 ForEach(PhotoFilter.allCases) { filter in
-                    Label(filter == .undecided ? "待定" : filter.rawValue, systemImage: filter.iconName).tag(filter)
+                    Label(filter.rawValue, systemImage: filter.iconName).tag(filter)
                 }
             }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: store.filter.iconName)
-                Text(store.filter == .undecided ? "待定" : store.filter.rawValue)
-            }
-            .font(.subheadline.weight(.medium))
-            .padding(.horizontal, 12)
-            .frame(minHeight: 44)
-            .background(GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
-        }
-        .tint(.primary)
-        .accessibilityLabel("筛选照片")
-        .accessibilityValue(store.filter == .undecided ? "待定" : store.filter.rawValue)
-    }
-
-    private var positionLabel: some View {
-        VStack(spacing: 1) {
-            if let index = store.currentIndex {
-                Text("\(index + 1) / \(store.visible.count)")
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                if let asset = store.currentAsset {
-                    Text(Self.caption(for: asset))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private var moreMenu: some View {
-        Menu {
-            Toggle("标记后自动下一张", isOn: $autoAdvance)
             Divider()
+            Toggle("标记后自动下一张", isOn: $autoAdvance)
             Button(role: .destructive) {
                 confirmDeleteCurrent = true
             } label: {
@@ -221,29 +216,35 @@ struct ViewerScreen: View {
             }
             .disabled(store.discardedAssets.isEmpty)
         } label: {
-            Image(systemName: "ellipsis")
-                .frame(width: 44, height: 44)
-                .background(GlancePalette.control(scheme), in: .rect(cornerRadius: 8))
+            Text("筛选")
+                .font(.system(size: 17))
+                .foregroundStyle(store.filter == .all ? GlancePalette.foreground(scheme) : GlancePalette.accent)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(.rect)
         }
-        .tint(.primary)
-        .accessibilityLabel("更多照片操作")
+        .accessibilityLabel("筛选和更多操作")
+        .accessibilityValue(store.filter.rawValue)
     }
 
-    private var bottomBar: some View {
-        VStack(spacing: 10) {
-            if sizeClass != .regular, heightClass != .compact, !store.visible.isEmpty {
-                ThumbnailStrip(axis: .horizontal)
-                    .frame(height: 72)
+    /// "01 / 24 · IMG_0421" under the navigation bar.
+    private var caption: some View {
+        Group {
+            if let index = store.currentIndex, let asset = store.currentAsset {
+                let digits = max(2, String(store.visible.count).count)
+                let position = String(format: "%0\(digits)d / %d", index + 1, store.visible.count)
+                let name = store.displayName(of: asset)
+                Text(name.isEmpty ? position : "\(position)  ·  \(name)")
+            } else {
+                Text(" ")
             }
-            RatingBar()
-                .padding(.horizontal, 14)
         }
-        .padding(.top, 10)
+        .font(.system(size: 13))
+        .monospacedDigit()
+        .foregroundStyle(GlancePalette.muted(scheme))
+        .lineLimit(1)
+        .padding(.horizontal, 20)
         .padding(.bottom, 8)
-        .background {
-            if reduceTransparency { GlancePalette.canvas(scheme) }
-            else { Rectangle().fill(.ultraThinMaterial) }
-        }
+        .opacity(chromeVisible ? 1 : 0)
     }
 
     /// Arrow keys on an iPad keyboard.
@@ -255,14 +256,40 @@ struct ViewerScreen: View {
         .opacity(0)
         .accessibilityHidden(true)
     }
-
-    private static func caption(for asset: PHAsset) -> String {
-        let date = asset.creationDate?.formatted(.dateTime.year().month().day().hour().minute()) ?? ""
-        return "\(date) · \(asset.pixelWidth)×\(asset.pixelHeight)"
-    }
 }
 
+/// "相册" sheet: choose which part of the library to cull.
+struct AlbumSheet: View {
+    @EnvironmentObject private var store: LibraryStore
+    @Environment(\.dismiss) private var dismiss
 
+    var body: some View {
+        NavigationStack {
+            List(store.albums) { album in
+                Button {
+                    store.selectAlbum(album)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Label(album.title, systemImage: album.symbol)
+                        Spacer()
+                        Text("\(album.count)").foregroundStyle(.secondary).monospacedDigit()
+                        if album.id == store.selectedAlbumID {
+                            Image(systemName: "checkmark").foregroundStyle(GlancePalette.accent)
+                        }
+                    }
+                    .frame(minHeight: 44)
+                }
+                .foregroundStyle(.primary)
+                .accessibilityAddTraits(album.id == store.selectedAlbumID ? .isSelected : [])
+            }
+            .navigationTitle("相册")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
 
 struct EmptyFilterView: View {
     @EnvironmentObject private var store: LibraryStore
