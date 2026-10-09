@@ -11,7 +11,7 @@ public enum ImageStatus: String, Codable, Sendable {
 public enum PhotoFilter: String, CaseIterable, Identifiable, Sendable {
     case all = "全部"
     case keep = "保留"
-    case undecided = "不确定"
+    case undecided = "待定"
     case discard = "丢弃"
     
     public var id: String { self.rawValue }
@@ -22,6 +22,17 @@ public enum PhotoFilter: String, CaseIterable, Identifiable, Sendable {
         case .keep: return "flag.fill"
         case .undecided: return "questionmark.circle"
         case .discard: return "xmark.circle"
+        }
+    }
+}
+
+extension ImageStatus {
+    /// Label used in the UI (matches the design: 丢弃 / 待定 / 保留).
+    public var title: String {
+        switch self {
+        case .discard: return "丢弃"
+        case .undecided: return "待定"
+        case .keep: return "保留"
         }
     }
 }

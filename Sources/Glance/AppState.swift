@@ -57,6 +57,41 @@ class AppState: ObservableObject {
     @Published var selectedImageIndices: Set<Int> = []
     @Published var activeFilter: PhotoFilter = .all
     @Published var isCropEditing: Bool = false
+    /// Filename search typed into the title bar's search field.
+    @Published var searchText: String = "" {
+        didSet { if searchText != oldValue { updateFilteredImages(preserveSelection: true) } }
+    }
+
+    /// Name of the folder being browsed, shown in the title bar and sidebar.
+    var folderName: String {
+        allImageFiles.first?.deletingLastPathComponent().lastPathComponent ?? ""
+    }
+
+    private func matches(_ url: URL, filter: PhotoFilter) -> Bool {
+        let status = MetadataManager.shared.getMetadata(for: url).status
+        switch filter {
+        case .all: return true
+        case .keep: return status == .keep
+        case .undecided: return status == .undecided
+        case .discard: return status == .discard
+        }
+    }
+
+    /// Number of photos in the folder that belong to `filter` (ignores the search text).
+    func count(for filter: PhotoFilter) -> Int {
+        allImageFiles.filter { matches($0, filter: filter) }.count
+    }
+
+    /// Puts the current photo next to its neighbour for side-by-side comparison, or leaves comparison.
+    func toggleCompare() {
+        if selectedImageIndices.count > 1 {
+            selectSingleImage(index: selectedImageIndex)
+            return
+        }
+        let neighbour = selectedImageIndex + 1 < imageFiles.count ? selectedImageIndex + 1 : selectedImageIndex - 1
+        guard imageFiles.indices.contains(neighbour) else { return }
+        selectedImageIndices.insert(neighbour)
+    }
     
     // Track last clicked index for Shift selection
     private var lastClickedIndex: Int?
@@ -66,19 +101,10 @@ class AppState: ObservableObject {
     func updateFilteredImages(preserveSelection: Bool = true) {
         let oldSelectedURL = currentImageURL
         
-        let manager = MetadataManager.shared
+        let query = searchText.trimmingCharacters(in: .whitespaces)
         self.imageFiles = allImageFiles.filter { url in
-            let meta = manager.getMetadata(for: url)
-            switch activeFilter {
-            case .all:
-                return true
-            case .keep:
-                return meta.status == .keep
-            case .undecided:
-                return meta.status == .undecided
-            case .discard:
-                return meta.status == .discard
-            }
+            matches(url, filter: activeFilter)
+                && (query.isEmpty || url.lastPathComponent.localizedCaseInsensitiveContains(query))
         }
         
         if preserveSelection, let oldSelectedURL, let newIndex = imageFiles.firstIndex(of: oldSelectedURL) {

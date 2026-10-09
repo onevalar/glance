@@ -33,6 +33,8 @@ struct ImagePreviewView: View {
                     image: currentImage,
                     cropRect: appState.currentImageURL.map { MetadataManager.shared.getMetadata(for: $0).cropRect } ?? nil,
                     isCropEditing: appState.isCropEditing,
+                    // Keep the picture clear of the counter above and the floating bar below.
+                    fitInsets: GlanceFitInsets(top: 64, left: 28, bottom: 108, right: 28),
                     onScaleChanged: { newScale in
                         scale = CGSize(width: newScale, height: newScale)
                     },
@@ -80,6 +82,9 @@ struct ImagePreviewView: View {
             Button("确定", role: .cancel) { openError = nil }
         } message: { Text(openError ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("open-image"))) { _ in
+            refreshImage()
+        }
+        .onChange(of: appState.currentImageURL) { _, _ in
             refreshImage()
         }
         .onAppear {

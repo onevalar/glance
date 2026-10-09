@@ -8,21 +8,21 @@ struct WelcomeView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                content.frame(minHeight: geometry.size.height)
-            }
-            .background(GlancePalette.raised(colorScheme))
-        }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("过目").font(.system(size: 13, weight: .medium))
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button { openWindow(id: Constants.settingsWindowID) } label: {
-                    Image(systemName: "slider.horizontal.3")
+        VStack(spacing: 0) {
+            GlanceTitleBar {
+                Text("过目")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(GlancePalette.foreground(colorScheme))
+            } trailing: {
+                TitleBarButton(symbol: "slider.horizontal.3", label: "Preferences...") {
+                    openWindow(id: Constants.settingsWindowID)
                 }
-                .accessibilityLabel("Preferences...")
+            }
+            GeometryReader { geometry in
+                ScrollView {
+                    content.frame(minHeight: geometry.size.height)
+                }
+                .background(GlancePalette.raised(colorScheme))
             }
         }
     }

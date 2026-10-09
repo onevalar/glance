@@ -58,6 +58,7 @@ targets:
       properties:
         CFBundleDisplayName: 过目
         CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [zh-Hans]
         NSPhotoLibraryUsageDescription: “过目”需要读取你的相册，帮你快速筛选照片。照片只在本机处理，不会上传。
         UILaunchScreen: {}
         UIApplicationSceneManifest:

@@ -3,6 +3,11 @@ import SwiftUI
 
 // MARK: - NSView: Image display with zoom & pan
 
+/// Space kept free around the fitted picture (for floating controls). Zooming still uses the whole view.
+struct GlanceFitInsets: Equatable {
+    var top: CGFloat = 0, left: CGFloat = 0, bottom: CGFloat = 0, right: CGFloat = 0
+}
+
 final class GlanceImageView: NSView {
     var image: NSImage? {
         didSet { needsDisplay = true }
@@ -11,6 +16,9 @@ final class GlanceImageView: NSView {
     var onStateChanged: ((CGFloat) -> Void)?
     var onClick: (() -> Void)?
     var isDarkMode = false { didSet { if oldValue != isDarkMode { needsDisplay = true } } }
+    var fitInsets = GlanceFitInsets() {
+        didSet { if oldValue != fitInsets { resetFit() } }
+    }
     
     var cropRect: CGRect? {
         didSet { resetFit() }
@@ -70,7 +78,8 @@ final class GlanceImageView: NSView {
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        let fillColor = GlancePalette.canvasColor(dark: isDarkMode)
+        // Compare cards sit on the surface colour; the single-photo canvas uses the canvas colour.
+        let fillColor = isShared ? GlancePalette.surfaceColor(dark: isDarkMode) : GlancePalette.canvasColor(dark: isDarkMode)
         fillColor.setFill()
         bounds.fill()
 
@@ -222,12 +231,15 @@ final class GlanceImageView: NSView {
             targetSize = image.size
         }
 
+        let availableWidth = max(1, bounds.width - fitInsets.left - fitInsets.right)
+        let availableHeight = max(1, bounds.height - fitInsets.top - fitInsets.bottom)
         let fitMag = min(
-            bounds.width / targetSize.width,
-            bounds.height / targetSize.height
+            availableWidth / targetSize.width,
+            availableHeight / targetSize.height
         )
         magnification = fitMag
-        offset = .zero
+        // The view is not flipped (y grows upwards), so a larger top inset moves the picture down.
+        offset = CGPoint(x: (fitInsets.left - fitInsets.right) / 2, y: (fitInsets.bottom - fitInsets.top) / 2)
         hasPerformedInitialFit = true
         needsDisplay = true
 
@@ -317,6 +329,7 @@ struct GlanceImageRepresentable: NSViewRepresentable {
     // Crop state properties
     var cropRect: CGRect? = nil
     var isCropEditing: Bool = false
+    var fitInsets = GlanceFitInsets()
     
     // Sharing binding state
     var sharedZoom: Binding<CGFloat>? = nil
@@ -333,6 +346,7 @@ struct GlanceImageRepresentable: NSViewRepresentable {
         view.isDarkMode = isDarkMode
         view.cropRect = cropRect
         view.isCropEditing = isCropEditing
+        view.fitInsets = fitInsets
         view.onStateChanged = onStateChanged
         view.onClick = onClick
         
@@ -360,6 +374,7 @@ struct GlanceImageRepresentable: NSViewRepresentable {
         nsView.isDarkMode = isDarkMode
         
         // Update crop properties first, so if they change it triggers redraw/re-layout
+        nsView.fitInsets = fitInsets
         if nsView.isCropEditing != isCropEditing {
             nsView.isCropEditing = isCropEditing
         }
@@ -397,6 +412,7 @@ struct ZoomableImageView: View {
     // Crop state properties
     var cropRect: CGRect? = nil
     var isCropEditing: Bool = false
+    var fitInsets = GlanceFitInsets()
     
     // Sharing binding state
     var sharedZoom: Binding<CGFloat>? = nil
@@ -413,6 +429,7 @@ struct ZoomableImageView: View {
             isDarkMode: colorScheme == .dark,
             cropRect: cropRect,
             isCropEditing: isCropEditing,
+            fitInsets: fitInsets,
             sharedZoom: sharedZoom,
             sharedPan: sharedPan,
             isShared: isShared,

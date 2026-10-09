@@ -5,6 +5,7 @@
 
 import SwiftUI
 
+/// One photo card in the sidebar: picture, file name and rating (Paper: "01 · macOS 单图").
 struct ImageThumbnailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var metadataManager = MetadataManager.shared
@@ -15,73 +16,54 @@ struct ImageThumbnailView: View {
 
     @State private var thumbnail: NSImage?
 
-    private var highlightColor: Color {
-        GlancePalette.accent
-    }
-    
-    private var metadata: ImageMetadata {
-        metadataManager.getMetadata(for: imageURL)
+    private var status: ImageStatus {
+        metadataManager.getMetadata(for: imageURL).status
     }
 
     var body: some View {
-        let isDiscarded = metadata.status == .discard
-        let isKeep = metadata.status == .keep
-        
-        ZStack(alignment: .topTrailing) {
-            if let thumbnail {
-                Image(nsImage: thumbnail)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 120, height: 90)
-                    .clipShape(.rect(cornerRadius: 4))
-                    .opacity(isDiscarded ? 0.4 : 1.0)
-                    .overlay {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(highlightColor, lineWidth: 3)
-                        } else if isMultiSelected {
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(highlightColor.opacity(0.5), lineWidth: 3)
-                                .background(highlightColor.opacity(0.2))
-                        }
-                    }
-                    .scaleEffect(isSelected ? 1.06 : 1.0)
-                    .shadow(color: isSelected ? .black.opacity(colorScheme == .dark ? 0.25 : 0.15) : .clear, radius: 6, x: 0, y: 3)
-                    .animation(.easeInOut(duration: 0.2), value: isSelected)
-            } else {
-                // Placeholder while loading, or when the file cannot be decoded.
-                Image(systemName: "photo")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 120, height: 90)
-                    .background(Color.clear)
-                    .opacity(isDiscarded ? 0.4 : 1.0)
+        VStack(alignment: .leading, spacing: 8) {
+            Group {
+                if let thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Rectangle().fill(GlancePalette.buttonFill(colorScheme))
+                        .overlay { Image(systemName: "photo").foregroundStyle(GlancePalette.muted(colorScheme)) }
+                }
             }
-            
-            // Status Badge Overlay
-            if isDiscarded {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.red)
-                    .background(Circle().fill(Color.white).frame(width: 14, height: 14))
-                    .font(.system(size: 16))
-                    .padding([.top, .trailing], 6)
-            } else if isKeep {
-                Image(systemName: "flag.fill")
-                    .foregroundColor(.green)
-                    .background(RoundedRectangle(cornerRadius: 2).fill(Color.white).frame(width: 12, height: 12))
-                    .font(.system(size: 14))
-                    .padding([.top, .trailing], 6)
+            .frame(maxWidth: .infinity)
+            .frame(height: 103)
+            .clipShape(.rect(cornerRadius: 4))
+            .opacity(status == .discard ? 0.4 : 1)
+
+            HStack(spacing: 8) {
+                Text(imageURL.lastPathComponent)
+                    .foregroundStyle(GlancePalette.secondary(colorScheme))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+                Text(status.title)
+                    .foregroundStyle(status == .keep ? GlancePalette.foreground(colorScheme) : GlancePalette.muted(colorScheme))
+                    .fixedSize()
             }
+            .font(.system(size: 12))
         }
-        .frame(width: 120, height: 90)
+        .padding(8)
+        .background(isMultiSelected ? GlancePalette.accentSoft(colorScheme) : .clear, in: .rect(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(isSelected || isMultiSelected ? GlancePalette.accent : GlancePalette.divider(colorScheme), lineWidth: 1)
+        }
+        .contentShape(.rect(cornerRadius: 8))
         .task(id: imageURL) {
-            // The view can be reused for another file after a deletion; never show the old picture.
+            // The card can be reused for another file after a deletion; never show the old picture.
             thumbnail = nil
-            thumbnail = await ThumbnailCache.thumbnail(for: imageURL)
+            thumbnail = await ThumbnailCache.thumbnail(for: imageURL, maxPixelSize: 480)
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("open-image"))) { _ in
             // Rotation and crop post this after rewriting the file; reload so the sidebar follows.
-            Task { thumbnail = await ThumbnailCache.thumbnail(for: imageURL) }
+            Task { thumbnail = await ThumbnailCache.thumbnail(for: imageURL, maxPixelSize: 480) }
         }
     }
 }

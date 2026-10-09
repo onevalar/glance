@@ -5,97 +5,73 @@
 
 import SwiftUI
 
+/// Right-hand "文件信息" panel (Paper: 260pt wide, docked).
 struct ImageInfoPanel: View {
     @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var metadata = MetadataManager.shared
 
     let imageURL: URL?
-    let windowHeight: CGFloat
-    let onClose: () -> Void
 
-    private var infoItems: [(String, String)] {
+    private var rows: [(String, String)] {
         guard let url = imageURL else { return [] }
-        let fileManager = FileManager.default
-
-        let name = url.lastPathComponent
-        let format = url.pathExtension.uppercased()
-
-        var items: [(String, String)] = [
-            (String(localized: "名称"), name),
-            (String(localized: "格式"), format),
-        ]
-
-        if let attrs = try? fileManager.attributesOfItem(atPath: url.path) {
-            if let fileSize = attrs[.size] as? Int64 {
-                items.append((String(localized: "大小"), formatBytes(fileSize)))
-            }
-            if let modDate = attrs[.modificationDate] as? Date {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy/MM/dd HH:mm"
-                items.append((String(localized: "修改时间"), formatter.string(from: modDate)))
-            }
-        }
-
+        var pixels = "—"
         if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
            let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
            let width = props[kCGImagePropertyPixelWidth] as? Int,
            let height = props[kCGImagePropertyPixelHeight] as? Int {
-            items.insert((String(localized: "像素"), "\(width) × \(height)"), at: 1)
+            pixels = "\(width) × \(height)"
         }
-
-        return items
+        return [
+            (String(localized: "文件名"), url.lastPathComponent),
+            (String(localized: "尺寸"), pixels),
+            (String(localized: "格式"), url.pathExtension.uppercased()),
+            (String(localized: "所在位置"), url.deletingLastPathComponent().lastPathComponent),
+            (String(localized: "标记"), metadata.getMetadata(for: url).status.title),
+        ]
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Text("信息")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+        VStack(alignment: .leading, spacing: 20) {
+            Text("文件信息")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(GlancePalette.foreground(colorScheme))
 
-            Divider()
-                .padding(.horizontal, 12)
-
-            // Info items
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(infoItems, id: \.0) { label, value in
-                        VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(rows, id: \.0) { label, value in
+                        VStack(alignment: .leading, spacing: 8) {
                             Text(label)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 12))
+                                .foregroundStyle(GlancePalette.muted(colorScheme))
                             Text(value)
-                                .font(.system(size: 13))
-                                .foregroundStyle(.primary)
+                                .font(.system(size: 15))
+                                .foregroundStyle(GlancePalette.foreground(colorScheme))
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
                         }
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(GlancePalette.divider(colorScheme)).frame(height: 1)
+                        }
+                        .accessibilityElement(children: .combine)
                     }
-                }
-                .padding(12)
-            }
-        }
-        .frame(width: 260, height: windowHeight)
-        .background(GlancePalette.panel(colorScheme))
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(GlancePalette.border(colorScheme))
-                .frame(width: 1)
-        }
-    }
 
-    private func formatBytes(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+                    Text("← → 切换图片\n滚轮缩放 · 拖动平移\n5 秒无操作后工具栏隐藏")
+                        .font(.system(size: 13))
+                        .foregroundStyle(GlancePalette.muted(colorScheme))
+                        .lineSpacing(4)
+                }
+            }
+            .scrollIndicators(.never)
+        }
+        .padding(24)
+        .frame(width: 260)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(GlancePalette.inspector(colorScheme))
+        .overlay(alignment: .leading) {
+            Rectangle().fill(GlancePalette.divider(colorScheme)).frame(width: 1)
+        }
     }
 }

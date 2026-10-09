@@ -16,23 +16,22 @@ struct CropOverlayView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Text(filename).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                Text("裁剪").foregroundStyle(.secondary)
-                Spacer(minLength: 12)
-                Button("重置") { session.reset() }.buttonStyle(.bordered)
-                Button("取消", action: onCancel).buttonStyle(.bordered).keyboardShortcut(.cancelAction)
-                Button("完成") { onCommit(session.rect) }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+            GlanceTitleBar {
+                Text("\(filename) · 裁剪")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(GlancePalette.foreground(colorScheme))
+                    .lineLimit(1).truncationMode(.middle)
+            } trailing: {
+                Button("重置") { session.reset() }.buttonStyle(CompareChipStyle())
+                Button("取消", action: onCancel).buttonStyle(CompareChipStyle()).keyboardShortcut(.cancelAction)
+                Button("完成") { onCommit(session.rect) }
+                    .buttonStyle(CropDoneStyle()).keyboardShortcut(.defaultAction)
             }
-            .controlSize(.large)
-            .padding(.leading, 80).padding(.trailing, 24)
-            .frame(height: 68)
-            .background(GlancePalette.raised(colorScheme))
-            Divider()
             HStack(spacing: 0) {
                 GeometryReader { viewport in cropCanvas(size: viewport.size) }
+                    .padding(.horizontal, 48).padding(.vertical, 40)
                     .background(GlancePalette.canvas(colorScheme))
-                Divider()
+                Rectangle().fill(GlancePalette.divider(colorScheme)).frame(width: 1)
                 cropInspector
             }
         }
@@ -47,10 +46,28 @@ struct CropOverlayView: View {
                 Text("裁剪").font(.system(size: 20, weight: .semibold))
                 VStack(alignment: .leading, spacing: 8) {
                     Text("比例").foregroundStyle(.secondary)
-                    Picker("裁剪比例", selection: Binding(get: { session.ratio }, set: { session.selectRatio($0, imageSize: image.size) })) {
-                        ForEach(CropRatio.allCases) { ratio in Text(LocalizedStringKey(ratio.rawValue)).tag(ratio) }
+                    Menu {
+                        ForEach(CropRatio.allCases) { ratio in
+                            Button {
+                                session.selectRatio(ratio, imageSize: image.size)
+                            } label: {
+                                Text(LocalizedStringKey(ratio.rawValue))
+                                if session.ratio == ratio { Image(systemName: "checkmark") }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(LocalizedStringKey(session.ratio.rawValue))
+                            Image(systemName: "arrowtriangle.down.fill").font(.system(size: 6))
+                        }
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(GlancePalette.secondary(colorScheme))
+                        .frame(maxWidth: .infinity).frame(height: 32)
+                        .background(GlancePalette.buttonFill(colorScheme), in: .rect(cornerRadius: 8))
+                        .contentShape(.rect(cornerRadius: 8))
                     }
-                    .labelsHidden().pickerStyle(.menu).controlSize(.large).frame(maxWidth: .infinity)
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+                    .accessibilityLabel("裁剪比例")
                 }
                 Text("拖动边角调整范围，拖动框内移动。")
                     .font(.system(size: 15)).fixedSize(horizontal: false, vertical: true)
@@ -62,12 +79,12 @@ struct CropOverlayView: View {
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(20).frame(maxWidth: .infinity, alignment: .leading)
-                .background(GlancePalette.control(colorScheme), in: RoundedRectangle(cornerRadius: 8))
+                .background(GlancePalette.buttonFill(colorScheme), in: RoundedRectangle(cornerRadius: 8))
             }
             .padding(24).frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(width: 260)
-        .background(GlancePalette.raised(colorScheme))
+        .background(GlancePalette.inspector(colorScheme))
     }
 
     private func cropCanvas(size: CGSize) -> some View {
@@ -175,5 +192,18 @@ private extension CropHandle {
         case .bottomLeft: "调整左下角"
         case .left: "调整左边缘"
         }
+    }
+}
+
+
+private struct CropDoneStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(GlancePalette.accent, in: .rect(cornerRadius: 8))
+            .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }

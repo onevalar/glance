@@ -45,6 +45,7 @@ struct GlanceApp: App {
                 .frame(minWidth: 720, minHeight: 520)
         }
         .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1280, height: 820)
         .defaultPosition(.center)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -60,7 +61,7 @@ struct GlanceApp: App {
                 }
                 .keyboardShortcut("p", modifiers: [])
                 
-                Button("标记为不确定") {
+                Button("标记为待定") {
                     appState.setStatusForSelectedImages(.undecided)
                 }
                 .keyboardShortcut("u", modifiers: [])
@@ -86,7 +87,7 @@ struct GlanceApp: App {
                 }
                 .keyboardShortcut("1", modifiers: [])
                 
-                Button("评分：2 (不确定)") {
+                Button("评分：2 (待定)") {
                     appState.setStatusForSelectedImages(.undecided)
                 }
                 .keyboardShortcut("2", modifiers: [])

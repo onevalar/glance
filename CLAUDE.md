@@ -94,20 +94,30 @@ private var logger
 4. `AppState.selectedImageIndex` tracks current image
 
 ### View Hierarchy (ContentView)
+Layout follows the Paper file "03 · Glance 过目 · 界面与交互" (artboards 01–09). The app draws its own title bar; the system toolbar is not used (on macOS 26 it adds glass capsules that differ from the design).
 ```
-ContentView (GeometryReader + ZStack)
-├── ThumbnailSidebar (left, hidden with the toolbar button; only when > 1 image)
-├── ImageInfoPanel (right, optional)
-├── ImagePreviewView → ZoomableImageView   (single selection)
-│   or ImageCompareView                    (2+ selected images)
-├── left / right navigation arrows
-├── ToolBarView (bottom, floating, auto-hides after 5s)
-└── CropOverlayView (only while cropping)
+ContentView
+├── (no photos)  ImagePreviewView → WelcomeView
+├── (cropping)   CropOverlayView            title bar + canvas + 260pt inspector
+└── browser
+    ├── GlanceTitleBar (52pt)               sidebar toggle · folder/count · search · compare · info · more menu
+    ├── ThumbnailSidebar (208pt)            folder name, filter "全部 N ▾", photo cards (image, file name, rating)
+    ├── canvas
+    │   ├── ImagePreviewView → ZoomableImageView   (fitInsets keep the photo clear of the counter and bar)
+    │   │   or ImageCompareView                    (2+ selected; own title bar, hides sidebar and info panel)
+    │   ├── counter label "01 / 24  file name" (top-left)
+    │   └── ToolBarView  ‹ 丢弃 X | 待定 U | 保留 P › 裁剪 R   (floating, auto-hides after 5s)
+    └── ImageInfoPanel (260pt)              文件名 / 尺寸 / 格式 / 所在位置 / 标记
 ```
-The browsing preview includes the hidden-title-bar height (`geometry.height + 28`). The crop editor has its own image canvas below the action bar and beside the inspector; both its image and handles use that canvas's measured size. Do not project crop handles using the whole window size.
+- `GlanceTitleBar` + `TrafficLightInset` (Views/GlanceTitleBar.swift) centre the system traffic lights in the 52pt bar; every screen (welcome, browser, compare, crop) uses the same bar.
+- Colours come from `GlancePalette` (sRGB conversions of the design tokens): `surface`, `inspector`, `canvas`, `foreground/secondary/muted`, `divider`, `fieldBorder`, `buttonFill`, `accent`.
+- The UI is Chinese only (design language); the string catalog has no English entries and the app declares `zh-Hans`.
+- Rating wording: 丢弃 / 待定 / 保留 (`ImageStatus.title`).
+- Visual check without a display: `GLANCE_SNAPSHOT_DIR=<folder of photos> GLANCE_SNAPSHOT_MODE=browse|compare|crop|welcome [GLANCE_SNAPSHOT_DARK=0] swift test --filter SnapshotTests` writes `snapshot-<mode>-<scheme>.png` next to the photos. Compare it with the Paper artboards (read via the Paper MCP).
 
 ### Things to remember
 - Views talk through `NotificationCenter` names `"open-image"` (reload the current image) and `"metadata-updated"`.
 - Compare-mode zoom is stored relative to each picture's own fit and pan as a fraction of the zoomed picture, so photos of different sizes stay aligned.
 - Tests must never use `MetadataManager.shared` (it writes the real metadata file); create `MetadataManager(saveURL:)` with a temp file.
+- The window is sandboxed: the first time a folder is opened the system asks for access to it.
 - Supported formats: png, jpg, jpeg, gif, webp (HEIC/TIFF are not indexed).
