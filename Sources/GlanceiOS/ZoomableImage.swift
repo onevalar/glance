@@ -40,15 +40,14 @@ final class VerticalPanGestureRecognizer: UIPanGestureRecognizer {
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
         if state == .possible, let point = touches.first?.location(in: view) {
-            // Measured by hand from the touch itself: `translation` is only updated inside `super`, which may
-            // already start the gesture on a fast first move.
+            // Measured by hand from the touch itself, and nothing is passed on to the pan until the direction is
+            // known: otherwise a slow drag can start the pan after a few points, before it is clear it is sideways.
             let dx = point.x - startPoint.x, dy = point.y - startPoint.y
-            if abs(dx) > 12 || abs(dy) > 12 {
-                // Decide once: only a movement that is clearly vertical (within about 25° of straight up/down)
-                // starts a rating drag. Everything else belongs to paging and zooming, so a sideways swipe
-                // with a little vertical drift can never rate or discard by accident.
-                if abs(dy) < abs(dx) * 2.2 { state = .failed; return }
-            }
+            guard abs(dx) > 12 || abs(dy) > 12 else { return }
+            // Decide once: only a movement that is clearly vertical (within about 25° of straight up/down)
+            // starts a pull. Everything else belongs to paging and zooming, so a sideways swipe with a little
+            // vertical drift can never rate or discard by accident.
+            if abs(dy) < abs(dx) * 2.2 { state = .failed; return }
         }
         super.touchesMoved(touches, with: event)
     }
@@ -57,33 +56,30 @@ final class VerticalPanGestureRecognizer: UIPanGestureRecognizer {
 /// Pinch to zoom, drag to pan, double-tap to toggle zoom. Built on `UIScrollView`,
 /// which gives the native feel (inertia, rubber-banding) that a SwiftUI gesture can't match.
 ///
-/// While the photo is fitted (not zoomed), dragging it up or down is the rating gesture. The photo is moved by
-/// hand (not by scroll-view bounce): pulled down it shrinks into a rounded card that can be dropped in the
-/// trash; pulled up it recedes while the stars appear. Releasing past the threshold commits.
+/// The view covers the whole screen. At rest the photo is fitted inside `fitInsets` (clear of the bars); zooming
+/// in lets it use the whole screen, so there is never an invisible edge in the way.
+///
+/// While the photo is fitted, a clearly vertical drag is handed to `onPull` (rating / discarding).
 final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     let imageView = UIImageView()
-    var pixelSize: CGSize = .zero { didSet { if oldValue != pixelSize { needsFit = true } } }
+    var pixelSize: CGSize = .zero { didSet { if oldValue != pixelSize { needsFit = true; setNeedsLayout() } } }
     var onZoomChange: ((Bool) -> Void)?
     var onSingleTap: (() -> Void)?
     var onZoomedIn: (() -> Void)?
 
-    /// Rating by vertical drag while the photo is fitted: `offset` > 0 is dragged up (stars),
-    /// < 0 dragged down (trash); `xFraction` is where the finger is across the screen (0…1), which picks the star.
+    /// Space kept free around the photo when it is not zoomed (the bars), in this view's coordinates.
+    var fitInsets: UIEdgeInsets = .zero {
+        didSet { if oldValue != fitInsets { updateMinimumZoom(animated: window != nil) } }
+    }
+
     var ratingGesturesEnabled = true
-    /// Window position of the trash opening; the discarded photo flies there.
-    var trashTarget: (() -> CGPoint?)?
-    var onVerticalDrag: ((_ offset: CGFloat, _ xFraction: CGFloat, _ yFraction: CGFloat) -> Void)?
-    /// `direction` -1 = released far enough down (trash), +1 = released after pulling up (stars): the receiver
-    /// decides from the finger position whether a star was chosen.
-    var onVerticalCommit: ((_ direction: Int, _ xFraction: CGFloat, _ yFraction: CGFloat) -> Void)?
+    /// A vertical drag on the fitted photo (state, location and velocity are read from the recognizer).
+    var onPull: ((UIPanGestureRecognizer) -> Void)?
 
     var syncHub: CompareSyncHub? { didSet { syncHub?.register(self, id: syncID) } }
     var syncID = ""
 
-    /// Movement that is ignored before anything reacts, so a small drift never shows the stars or the trash.
-    private static let deadZone: CGFloat = 26
-    private static let commitDistance: CGFloat = 130
-    private let ratingPan = VerticalPanGestureRecognizer()
+    private let pullPan = VerticalPanGestureRecognizer()
 
     /// Opacity the photo returns to after an animation (dimmed while it is in the discard pile).
     var restingAlpha: CGFloat = 1
@@ -91,8 +87,13 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     private var lastBoundsSize: CGSize = .zero
     private var didReportZoomedIn = false
     private var applyingSync = false
+    /// The fit is being changed by the app (bars shown / hidden), not by the user: not a zoom.
+    private var fitAdjustments = 0
+    private var adjustingFit: Bool { fitAdjustments > 0 }
+    private var reportedZoomed = false
 
-    private var isFitted: Bool { zoomScale <= 1.01 }
+    /// Not zoomed in: the photo is at its resting size.
+    var isFitted: Bool { zoomScale <= minimumZoomScale + 0.01 }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -106,10 +107,10 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
         alwaysBounceHorizontal = false
         isDirectionalLockEnabled = true
 
-        ratingPan.addTarget(self, action: #selector(handleRatingPan(_:)))
-        ratingPan.maximumNumberOfTouches = 1
-        ratingPan.delegate = self
-        addGestureRecognizer(ratingPan)
+        pullPan.addTarget(self, action: #selector(handlePull(_:)))
+        pullPan.maximumNumberOfTouches = 1
+        pullPan.delegate = self
+        addGestureRecognizer(pullPan)
 
         imageView.contentMode = .scaleAspectFit
         addSubview(imageView)
@@ -127,16 +128,21 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
 
     /// Called when a pager cell is recycled for another photo.
     func resetForReuse() {
+        // Resetting the scale is not the user zooming.
+        fitAdjustments += 1
+        defer { fitAdjustments -= 1 }
         layer.removeAllAnimations()
-        layer.sublayerTransform = CATransform3DIdentity
         imageView.layer.removeAllAnimations()
-        imageView.layer.cornerRadius = 0
         imageView.alpha = 1
+        imageView.isHidden = false
         imageView.image = nil
-        imageView.transform = .identity
+        transform = .identity
+        minimumZoomScale = 1
         zoomScale = 1
         contentOffset = .zero
         didReportZoomedIn = false
+        if reportedZoomed { onZoomChange?(false) }
+        reportedZoomed = false
         needsFit = true
         setNeedsLayout()
     }
@@ -151,12 +157,15 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
         centerImage()
     }
 
-    /// Lays the picture out at "fit to screen" size, which is zoom scale 1.
+    /// Zoom scale 1 is the photo fitted to the whole view; the resting (minimum) scale fits it inside `fitInsets`.
     private func fitImage() {
         needsFit = false
         lastBoundsSize = bounds.size
         guard bounds.width > 0, bounds.height > 0, pixelSize.width > 0, pixelSize.height > 0 else { return }
+        fitAdjustments += 1
+        defer { fitAdjustments -= 1 }
 
+        minimumZoomScale = 1
         zoomScale = 1
         let ratio = min(bounds.width / pixelSize.width, bounds.height / pixelSize.height)
         let fitted = CGSize(width: pixelSize.width * ratio, height: pixelSize.height * ratio)
@@ -166,18 +175,69 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
         // Allow zooming in to at least 100% of the original pixels (focus / detail checks).
         let screenScale = traitCollection.displayScale
         let actualPixels = pixelSize.width / (fitted.width * screenScale)
-        minimumZoomScale = 1
         maximumZoomScale = min(max(actualPixels, 4), 20)
+        let resting = restingScale()
+        minimumZoomScale = resting
+        zoomScale = resting
         didReportZoomedIn = false
-        onZoomChange?(false)
+        report(zoomed: false)
         if let last = syncHub?.last, syncHub?.isEnabled == true { applySync(zoom: last.zoom, center: last.center) }
     }
 
+    /// The scale (relative to the full-view fit) at which the photo fits inside `fitInsets`.
+    private func restingScale() -> CGFloat {
+        guard pixelSize.width > 0, pixelSize.height > 0, bounds.width > 0, bounds.height > 0 else { return 1 }
+        let available = bounds.inset(by: fitInsets)
+        guard available.width > 60, available.height > 60 else { return 1 }
+        let full = min(bounds.width / pixelSize.width, bounds.height / pixelSize.height)
+        let inset = min(available.width / pixelSize.width, available.height / pixelSize.height)
+        return min(inset / full, 1)
+    }
+
+    /// The bars appeared or went away: a resting photo smoothly takes the new room; a zoomed one stays as it is.
+    private func updateMinimumZoom(animated: Bool) {
+        guard !needsFit, pixelSize.width > 0, bounds.width > 0 else { setNeedsLayout(); return }
+        let wasFitted = isFitted
+        let resting = restingScale()
+        guard abs(resting - minimumZoomScale) > 0.0001 else { centerImage(); return }
+        fitAdjustments += 1
+        let apply = {
+            self.minimumZoomScale = resting
+            if wasFitted || self.zoomScale < resting { self.zoomScale = resting }
+            self.centerImage()
+        }
+        if animated {
+            UIView.animate(withDuration: 0.38, delay: 0, usingSpringWithDamping: 0.92, initialSpringVelocity: 0,
+                           options: [.beginFromCurrentState, .allowUserInteraction], animations: apply) { _ in
+                self.fitAdjustments -= 1
+            }
+        } else {
+            apply()
+            fitAdjustments -= 1
+        }
+    }
+
+    /// Centres the photo inside the free area between the bars while it is small enough, inside the whole view
+    /// as it grows, and lets it scroll edge to edge once it is larger than the screen.
     private func centerImage() {
         var frame = imageView.frame
-        frame.origin.x = frame.width < bounds.width ? (bounds.width - frame.width) / 2 : 0
-        frame.origin.y = frame.height < bounds.height ? (bounds.height - frame.height) / 2 : 0
+        frame.origin.x = Self.leading(content: frame.width, length: bounds.width, lead: fitInsets.left, trail: fitInsets.right)
+        frame.origin.y = Self.leading(content: frame.height, length: bounds.height, lead: fitInsets.top, trail: fitInsets.bottom)
         imageView.frame = frame
+    }
+
+    private static func leading(content: CGFloat, length: CGFloat, lead: CGFloat, trail: CGFloat) -> CGFloat {
+        guard content < length else { return 0 }
+        let free = length - content
+        if free >= lead + trail { return lead + (free - lead - trail) / 2 }
+        let total = lead + trail
+        return total > 0 ? free * lead / total : free / 2
+    }
+
+    private func report(zoomed: Bool) {
+        guard zoomed != reportedZoomed else { return }
+        reportedZoomed = zoomed
+        onZoomChange?(zoomed)
     }
 
     // MARK: - UIScrollViewDelegate
@@ -186,7 +246,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerImage()
-        onZoomChange?(zoomScale > 1.01)
+        if !adjustingFit { report(zoomed: !isFitted) }
         if zoomScale > 1.3, !didReportZoomedIn {
             didReportZoomedIn = true
             onZoomedIn?()
@@ -194,16 +254,20 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
         broadcastTransform()
     }
 
+    func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+        if !adjustingFit { report(zoomed: !isFitted) }
+    }
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         broadcastTransform()
     }
 
-    // MARK: - Rating drag (up = stars, down = trash)
+    // MARK: - Pulling up / down
 
-    /// Never make the page-turning scroll view of the pager wait for (or be blocked by) the vertical rating pan.
+    /// Never make the page-turning scroll view of the pager wait for (or be blocked by) the vertical pull.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        gestureRecognizer === ratingPan
+        gestureRecognizer === pullPan
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
@@ -212,146 +276,30 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     }
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard gestureRecognizer === ratingPan else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
-        return ratingGesturesEnabled && isFitted
+        guard gestureRecognizer === pullPan else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
+        return ratingGesturesEnabled && onPull != nil && isFitted && imageView.image != nil
     }
 
-    /// Horizontal finger position across the window, 0…1.
-    private func fingerFraction(_ gesture: UIGestureRecognizer) -> CGPoint {
-        let size = window?.bounds.size ?? bounds.size
-        guard size.width > 0, size.height > 0 else { return CGPoint(x: 0.5, y: 0.5) }
-        let point = gesture.location(in: nil)
-        return CGPoint(x: (point.x / size.width).clamped(to: 0...1), y: (point.y / size.height).clamped(to: 0...1))
+    @objc private func handlePull(_ gesture: UIPanGestureRecognizer) {
+        onPull?(gesture)
     }
 
-    @objc private func handleRatingPan(_ gesture: UIPanGestureRecognizer) {
-        let translation = gesture.translation(in: self)
-        let finger = fingerFraction(gesture)
-        switch gesture.state {
-        case .began, .changed:
-            layer.removeAnimation(forKey: "dragTransform")
-            imageView.layer.removeAnimation(forKey: "dragCorner")
-            // Nothing moves or shows until the finger has travelled past the dead zone.
-            let beyond = max(0, abs(translation.y) - Self.deadZone) * (translation.y < 0 ? -1 : 1)
-            applyDragVisuals(pull: beyond)
-            onVerticalDrag?(-beyond, finger.x, finger.y)
-        case .ended, .cancelled, .failed:
-            let velocity = gesture.velocity(in: self).y
-            let down = translation.y
-            let up = -translation.y
-            var direction = 0
-            if gesture.state == .ended {
-                if down > Self.commitDistance || (velocity > 1400 && down > 80) { direction = -1 }
-                else if up > Self.deadZone + 40 { direction = 1 }
-            }
-            if direction != -1 { onVerticalDrag?(0, finger.x, finger.y) }
-            switch direction {
-            case -1:
-                // The trash stays on screen until the photo has gone into it.
-                dropIntoTrash { [weak self] in
-                    self?.onVerticalCommit?(-1, finger.x, finger.y)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-                        guard let self, self.ratingPan.state == .possible else { return }
-                        self.onVerticalDrag?(0, finger.x, finger.y)
-                    }
-                }
-            case 1:
-                springBack()
-                onVerticalCommit?(1, finger.x, finger.y)
-            default:
-                springBack()
-            }
-        default:
-            break
+    /// Hides the photo while its lifted copy is on the stage.
+    func setLifted(_ lifted: Bool) {
+        imageView.isHidden = lifted
+    }
+
+    /// Brings the photo back after it was lifted: instantly (it was put back in place) or fading in.
+    func showAgain(animated: Bool) {
+        imageView.isHidden = false
+        guard animated else { imageView.alpha = restingAlpha; return }
+        imageView.alpha = 0
+        transform = CGAffineTransform(scaleX: 0.94, y: 0.94)
+        UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0,
+                       options: [.allowUserInteraction]) {
+            self.imageView.alpha = self.restingAlpha
+            self.transform = .identity
         }
-    }
-
-    /// `pull` > 0 drags the photo down (it shrinks into a rounded card), < 0 drags it up (it recedes a little).
-    private func applyDragVisuals(pull: CGFloat) {
-        let progress = min(abs(pull) / (Self.commitDistance - Self.deadZone), 1)
-        let scale: CGFloat
-        let translationY: CGFloat
-        if pull >= 0 {
-            scale = 1 - 0.40 * progress
-            translationY = pull * 0.92
-        } else {
-            scale = 1 - 0.06 * progress
-            translationY = pull * 0.55
-        }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.sublayerTransform = CATransform3DScale(CATransform3DMakeTranslation(0, translationY, 0), scale, scale, 1)
-        imageView.layer.cornerRadius = pull > 0 ? 24 * progress : 0
-        imageView.layer.masksToBounds = pull > 0
-        CATransaction.commit()
-    }
-
-    private func springBack() {
-        let from = layer.presentation()?.sublayerTransform ?? layer.sublayerTransform
-        let spring = CASpringAnimation(keyPath: "sublayerTransform")
-        spring.fromValue = from
-        spring.toValue = CATransform3DIdentity
-        spring.damping = 15
-        spring.stiffness = 260
-        spring.mass = 1
-        spring.initialVelocity = 0
-        spring.duration = spring.settlingDuration
-        layer.sublayerTransform = CATransform3DIdentity
-        layer.add(spring, forKey: "dragTransform")
-
-        let corner = CABasicAnimation(keyPath: "cornerRadius")
-        corner.fromValue = imageView.layer.presentation()?.cornerRadius ?? imageView.layer.cornerRadius
-        corner.toValue = 0
-        corner.duration = 0.25
-        imageView.layer.cornerRadius = 0
-        imageView.layer.add(corner, forKey: "dragCorner")
-    }
-
-    /// The photo, already a small card, drops toward the trash that has risen at the bottom and disappears.
-    private func dropIntoTrash(completion: @escaping () -> Void) {
-        let from = layer.presentation()?.sublayerTransform ?? layer.sublayerTransform
-        var dx: CGFloat = 0, dy = bounds.height * 0.40
-        if window != nil, let point = trashTarget?() {
-            let local = convert(point, from: nil)
-            dx = local.x - bounds.midX
-            dy = local.y - bounds.midY
-        }
-        var target = CATransform3DMakeTranslation(dx, dy, 0)
-        target = CATransform3DRotate(target, 0.18, 0, 0, 1)
-        target = CATransform3DScale(target, 0.10, 0.10, 1)
-
-        CATransaction.begin()
-        CATransaction.setCompletionBlock { [weak self] in
-            completion()
-            // Show the photo again (it may stay on screen with its "discarded" badge) after a beat.
-            self?.imageView.alpha = 0
-            self?.layer.removeAnimation(forKey: "dragTransform")
-            self?.layer.sublayerTransform = CATransform3DIdentity
-            self?.imageView.layer.cornerRadius = 0
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                UIView.animate(withDuration: 0.25) { self?.imageView.alpha = self?.restingAlpha ?? 1 }
-            }
-        }
-        let move = CABasicAnimation(keyPath: "sublayerTransform")
-        move.fromValue = from
-        move.toValue = target
-        move.duration = 0.32
-        move.timingFunction = CAMediaTimingFunction(name: .easeIn)
-        layer.sublayerTransform = target
-        layer.add(move, forKey: "dragTransform")
-
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 1
-        fade.toValue = 0
-        fade.duration = 0.16
-        fade.beginTime = CACurrentMediaTime() + 0.16      // stays visible until it is small, then vanishes into the opening
-        fade.fillMode = .both
-        fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
-        imageView.layer.opacity = 0
-        imageView.layer.add(fade, forKey: "dropFade")
-        CATransaction.commit()
-        // Layer opacity is restored through `alpha` above; keep the model value in step.
-        imageView.layer.opacity = 1
     }
 
     // MARK: - Comparison sync
@@ -394,10 +342,10 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     }
 
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
-        if zoomScale > 1.01 {
-            setZoomScale(1, animated: true)
+        if !isFitted {
+            setZoomScale(minimumZoomScale, animated: true)
         } else {
-            let target = min(3, maximumZoomScale)
+            let target = min(max(minimumZoomScale * 2.5, 2), maximumZoomScale)
             let point = gesture.location(in: imageView)
             let size = CGSize(width: bounds.width / target, height: bounds.height / target)
             let rect = CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height)
@@ -422,8 +370,6 @@ struct ZoomableImage: UIViewRepresentable {
     var onZoomChange: (Bool) -> Void
     var onSingleTap: () -> Void
     var onZoomedIn: () -> Void
-    var onVerticalDrag: (CGFloat, CGFloat, CGFloat) -> Void = { _, _, _ in }
-    var onVerticalCommit: (Int, CGFloat, CGFloat) -> Void = { _, _, _ in }
 
     func makeUIView(context: Context) -> ZoomingScrollView {
         let view = ZoomingScrollView()
@@ -436,8 +382,6 @@ struct ZoomableImage: UIViewRepresentable {
         view.onZoomChange = onZoomChange
         view.onSingleTap = onSingleTap
         view.onZoomedIn = onZoomedIn
-        view.onVerticalDrag = onVerticalDrag
-        view.onVerticalCommit = onVerticalCommit
 
         view.ratingGesturesEnabled = ratingGesturesEnabled
         view.pixelSize = pixelSize

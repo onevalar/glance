@@ -7,50 +7,22 @@ import Photos
 import SwiftUI
 import UIKit
 
-/// What a photo being pulled up / down looks like to the SwiftUI layer.
-/// Only the small HUD views observe it, so a drag never re-renders the rest of the screen.
-@MainActor
-final class DragPhaseModel: ObservableObject {
-    enum Phase { case idle, rating, trashing }
-    /// Changes only when a pull starts or ends, so the bars that fade away during a pull barely re-render.
-    @Published var phase: Phase = .idle
-}
-
-@MainActor
-final class RatingDragModel: ObservableObject {
-    /// Points past the dead zone: > 0 pulled up (stars), < 0 pulled down (trash).
-    @Published var offset: CGFloat = 0 {
-        didSet {
-            let next: DragPhaseModel.Phase = offset > 0 ? .rating : (offset < 0 ? .trashing : .idle)
-            if phaseModel.phase != next { phaseModel.phase = next }
-        }
-    }
-    let phaseModel = DragPhaseModel()
-    /// Where the photo should land when it is dropped (the opening of the trash, in window coordinates).
-    var trashCenter: CGPoint?
-    @Published var fingerX: CGFloat = 0.5
-    @Published var fingerY: CGFloat = 0.5
-    /// Set by the star HUD; used to turn the finger position into a star when the photo is released.
-    var screenWidth: CGFloat = 393
-
-    /// Where the star row sits on screen (fraction of the screen height) and how forgiving the hit area is.
-    static let bandCenter: CGFloat = 0.33
-    static let bandHalfHeight: CGFloat = 0.07
-
-    var isDragging: Bool { offset != 0 }
-}
-
 /// Edge-to-edge horizontal paging through the photos, built on `UICollectionView` so that swiping never goes
 /// through SwiftUI diffing: only the visible page is alive, neighbours are pre-loaded, and the current photo is
 /// reported once a page has settled.
 struct PhotoPager: UIViewControllerRepresentable {
     var assets: [PHAsset]
     var currentID: String?
-    var drag: RatingDragModel
+    var phase: DragPhaseModel
+    var starCount: Int
+    /// Window y where the star row appears (the centre of the top bar).
+    var starRowY: CGFloat
+    /// Room kept free for the bars around a resting photo (window edges).
+    var fitInsets: UIEdgeInsets
     var onPageChange: (String) -> Void
     var onSingleTap: () -> Void
-    /// +1 = released after pulling up (finger position decides the stars), -1 = dropped into the trash.
-    var onCommit: (_ direction: Int, _ x: CGFloat, _ y: CGFloat) -> Void
+    var onZoomChange: (Bool) -> Void
+    var onCommit: (PullOutcome) -> Void
     var isDiscarded: (String) -> Bool
 
     func makeUIViewController(context: Context) -> PhotoPagerController {
@@ -61,8 +33,11 @@ struct PhotoPager: UIViewControllerRepresentable {
         controller.onPageChange = onPageChange
         controller.onSingleTap = onSingleTap
         controller.onCommit = onCommit
-        controller.drag = drag
+        controller.onZoomChange = onZoomChange
+        controller.phase = phase
         controller.isDiscarded = isDiscarded
+        controller.configureStage(starCount: starCount, starRowY: starRowY)
+        controller.setFitInsets(fitInsets)
         controller.update(assets: assets, currentID: currentID)
         controller.refreshDiscardedDimming()
     }
@@ -72,8 +47,9 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
                                   UICollectionViewDataSourcePrefetching {
     var onPageChange: ((String) -> Void)?
     var onSingleTap: (() -> Void)?
-    var onCommit: ((Int, CGFloat, CGFloat) -> Void)?
-    var drag: RatingDragModel?
+    var onCommit: ((PullOutcome) -> Void)?
+    var onZoomChange: ((Bool) -> Void)?
+    var phase: DragPhaseModel?
     /// Asks the store whether a photo is in the discard pile, so it can be dimmed in place.
     var isDiscarded: ((String) -> Bool)?
 
@@ -82,6 +58,10 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
     private var pendingID: String?
     private var reportedID: String?
     private var zoomedCells = Set<ObjectIdentifier>()
+    private var fitInsets: UIEdgeInsets = .zero
+    private let stage = PullStageView()
+    /// The pull that is being followed (a pull that starts while the stage is still busy is ignored).
+    private var pulling = false
 
     private let caching = PHCachingImageManager()
     private lazy var collectionView: UICollectionView = {
@@ -110,12 +90,33 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
         super.viewDidLoad()
         view.backgroundColor = .clear
         view.addSubview(collectionView)
+        view.addSubview(stage)
         caching.allowsCachingHighQualityImages = false
+        stage.onPhase = { [weak self] phase in
+            if self?.phase?.phase != phase { self?.phase?.phase = phase }
+        }
+        stage.onCommit = { [weak self] outcome in self?.onCommit?(outcome) }
+        stage.onFinish = { [weak self] in
+            guard let self else { return }
+            self.collectionView.isScrollEnabled = self.zoomedCells.isEmpty
+        }
+    }
+
+    func configureStage(starCount: Int, starRowY: CGFloat) {
+        if stage.starCount != starCount { stage.starCount = starCount }
+        if stage.starRowWindowY != starRowY { stage.starRowWindowY = starRowY }
+    }
+
+    func setFitInsets(_ insets: UIEdgeInsets) {
+        guard insets != fitInsets else { return }
+        fitInsets = insets
+        for case let cell as PhotoCell in collectionView.visibleCells { cell.zoomView.fitInsets = insets }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         collectionView.frame = view.bounds
+        stage.frame = view.bounds
         if view.bounds.size != lastSize {
             lastSize = view.bounds.size
             let id = reportedID ?? pendingID
@@ -173,6 +174,7 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { reportCurrentPage() }
+
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate { reportCurrentPage() }
     }
@@ -186,6 +188,7 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: PhotoCell.reuseID, for: indexPath) as! PhotoCell
+        cell.zoomView.fitInsets = fitInsets
         cell.configure(asset: assets[indexPath.item], caching: caching)
         cell.setDimmed(isDiscarded?(assets[indexPath.item].localIdentifier) ?? false)
         cell.onSingleTap = { [weak self] in self?.onSingleTap?() }
@@ -193,9 +196,10 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
             guard let cell else { return }
             self?.zoomChanged(cell: ObjectIdentifier(cell), zoomed: zoomed)
         }
-        cell.trashTarget = { [weak self] in self?.drag?.trashCenter }
-        cell.onDrag = { [weak self] offset, x, y in self?.dragChanged(offset, x, y) }
-        cell.onCommit = { [weak self] direction, x, y in self?.onCommit?(direction, x, y) }
+        cell.zoomView.onPull = { [weak self, weak cell] gesture in
+            guard let self, let cell else { return }
+            self.handlePull(gesture, on: cell)
+        }
         return cell
     }
 
@@ -215,18 +219,47 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
     // MARK: - Gestures from the photos
 
     private func zoomChanged(cell: ObjectIdentifier, zoomed: Bool) {
+        let wasZoomed = !zoomedCells.isEmpty
         if zoomed { zoomedCells.insert(cell) } else { zoomedCells.remove(cell) }
         // Zoomed in: dragging pans the photo instead of turning the page.
-        collectionView.isScrollEnabled = zoomedCells.isEmpty
+        collectionView.isScrollEnabled = zoomedCells.isEmpty && !stage.isBusy && !pulling
+        if wasZoomed != !zoomedCells.isEmpty { onZoomChange?(!zoomedCells.isEmpty) }
     }
 
-    private func dragChanged(_ offset: CGFloat, _ x: CGFloat, _ y: CGFloat) {
-        // While rating the finger also moves sideways to pick a star: the pager must not follow.
-        collectionView.isScrollEnabled = offset == 0 && zoomedCells.isEmpty
-        guard let drag else { return }
-        drag.fingerX = x
-        drag.fingerY = y
-        if drag.offset != offset { drag.offset = offset }
+    /// A vertical drag on a resting photo: the photo is lifted onto the stage and follows the finger there.
+    private func handlePull(_ gesture: UIPanGestureRecognizer, on cell: PhotoCell) {
+        let finger = gesture.location(in: stage)
+        let velocity = gesture.velocity(in: stage)
+        switch gesture.state {
+        case .began:
+            guard !stage.isBusy, let image = cell.zoomView.imageView.image else { pulling = false; return }
+            pulling = true
+            // While the photo is held the pager must not follow the finger sideways.
+            collectionView.isScrollEnabled = false
+            let imageView = cell.zoomView.imageView
+            let frame = imageView.convert(imageView.bounds, to: stage)
+            let id = cell.currentAssetID
+            stage.begin(image: image, frame: frame, finger: finger) { [weak cell] animated in
+                guard let cell else { return }
+                // The cell may show another photo by now (recycled): then it only needs to be visible.
+                cell.zoomView.showAgain(animated: animated && cell.currentAssetID == id)
+            }
+            cell.zoomView.setLifted(true)
+            stage.move(finger: finger, velocity: velocity)
+        case .changed:
+            guard pulling else { return }
+            stage.move(finger: finger, velocity: velocity)
+        case .ended:
+            guard pulling else { return }
+            pulling = false
+            stage.end(finger: finger, velocity: velocity, cancelled: false)
+        case .cancelled, .failed:
+            guard pulling else { return }
+            pulling = false
+            stage.end(finger: finger, velocity: velocity, cancelled: true)
+        default:
+            break
+        }
     }
 }
 
@@ -263,9 +296,6 @@ final class PhotoCell: UICollectionViewCell {
 
     var onSingleTap: (() -> Void)?
     var onZoomChange: ((Bool) -> Void)?
-    var trashTarget: (() -> CGPoint?)? { didSet { zoomView.trashTarget = trashTarget } }
-    var onDrag: ((CGFloat, CGFloat, CGFloat) -> Void)?
-    var onCommit: ((Int, CGFloat, CGFloat) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -274,8 +304,6 @@ final class PhotoCell: UICollectionViewCell {
         zoomView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         zoomView.onSingleTap = { [weak self] in self?.onSingleTap?() }
         zoomView.onZoomChange = { [weak self] zoomed in self?.onZoomChange?(zoomed) }
-        zoomView.onVerticalDrag = { [weak self] offset, x, y in self?.onDrag?(offset, x, y) }
-        zoomView.onVerticalCommit = { [weak self] direction, x, y in self?.onCommit?(direction, x, y) }
         zoomView.onZoomedIn = { [weak self] in self?.loadOriginal() }
     }
 

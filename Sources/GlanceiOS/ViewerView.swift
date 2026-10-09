@@ -13,8 +13,6 @@ struct PhotoPage: View {
     var syncHub: CompareSyncHub?
     var onZoomChange: (Bool) -> Void = { _ in }
     var onSingleTap: () -> Void = {}
-    var onVerticalDrag: (CGFloat, CGFloat, CGFloat) -> Void = { _, _, _ in }
-    var onVerticalCommit: (Int, CGFloat, CGFloat) -> Void = { _, _, _ in }
 
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
@@ -32,9 +30,7 @@ struct PhotoPage: View {
                         syncID: asset.localIdentifier,
                         onZoomChange: onZoomChange,
                         onSingleTap: onSingleTap,
-                        onZoomedIn: { Task { await loadOriginal() } },
-                        onVerticalDrag: onVerticalDrag,
-                        onVerticalCommit: onVerticalCommit
+                        onZoomedIn: { Task { await loadOriginal() } }
                     )
                 } else {
                     ProgressView()

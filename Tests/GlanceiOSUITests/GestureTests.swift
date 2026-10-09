@@ -47,7 +47,19 @@ final class GestureTests: XCTestCase {
         return (inset + (CGFloat(k - 1) + 0.5) / CGFloat(slots) * (screenWidth - inset * 2)) / screenWidth
     }
 
-    private let bandY: CGFloat = 0.33
+    /// The star row appears where the top bar is.
+    private var bandY: CGFloat {
+        let bar = element("top.scope").frame
+        let height = app.windows.firstMatch.frame.height
+        return bar.height > 0 && height > 0 ? bar.midY / height : 0.08
+    }
+
+    /// Screenshots at several moments while a gesture runs (the gesture call blocks until it is released).
+    private func filmstrip(_ name: String, at times: [Double]) {
+        for (index, time) in times.enumerated() {
+            DispatchQueue.global().asyncAfter(deadline: .now() + time) { self.shot("\(name)-\(index)") }
+        }
+    }
 
     // MARK: - Rating by pulling up
 
@@ -117,7 +129,32 @@ final class GestureTests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.5)
     }
 
+    func testThrowUpFilmstrip() throws {
+        let y = bandY
+        filmstrip("20-throw-up", at: [0.5, 0.8, 1.1, 1.4, 1.65, 1.8, 1.95, 2.2, 2.6])
+        at(0.5, 0.75).press(forDuration: 0.05, thenDragTo: at(slotX(4), y), withVelocity: .slow, thenHoldForDuration: 0.1)
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), "thrown into the 4th star")
+        Thread.sleep(forTimeInterval: 1)
+    }
+
+    func testZoomUsesTheWholeScreen() throws {
+        pager.pinch(withScale: 3, velocity: 4)
+        sleep(1)
+        XCTAssertFalse(element("dock.star.3").exists, "zooming in clears the bars like Photos")
+        shot("21-zoomed")
+        pager.doubleTap()
+        sleep(1)
+        shot("21-zoomed-back")
+    }
+
     // MARK: - Discard by pulling down
+
+    func testDropFilmstrip() throws {
+        filmstrip("22-drop", at: [0.4, 0.7, 1.0, 1.3, 1.5, 1.65, 1.8, 2.0, 2.3])
+        at(0.5, 0.35).press(forDuration: 0.05, thenDragTo: at(0.62, 0.80), withVelocity: .slow, thenHoldForDuration: 0.1)
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), "dropped into the bin")
+        Thread.sleep(forTimeInterval: 1)
+    }
 
     func testPullDownDiscardsAndUndoRestores() throws {
         drag((0.5, 0.35), (0.5, 0.82))

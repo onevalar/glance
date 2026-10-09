@@ -49,8 +49,9 @@ struct AccessDeniedView: View {
 /// The only screen. Three clearly separate layers, nothing is offered twice:
 ///
 /// 1. **Top bar** (glass on the plain canvas): 照片 (grid), the scope pill (position + album + rating filter), 更多.
-/// 2. **Photo area**: a fixed region between the bars. Swipe sideways = previous / next, pull **up** = stars,
-///    pull **down** = trash. A tap hides both bars and the photo fills the screen.
+/// 2. **Photo** (full screen, under the bars): at rest it fits between the bars; zooming in hides the bars and
+///    lets it use the whole screen. Swipe sideways = previous / next, pull **up** = throw it into a star, pull
+///    **down** = drop it in the trash bin. A tap hides both bars.
 /// 3. **Dock** (glass on the canvas): 🗑 · stars · 对比 — the same actions as the gestures, always visible.
 struct ViewerScreen: View {
     @EnvironmentObject private var store: LibraryStore
@@ -68,7 +69,10 @@ struct ViewerScreen: View {
         let assetIDs: [String]
     }
 
-    @State private var drag = RatingDragModel()   // not observed here: only the HUDs and `ChromeFade` follow it
+    @State private var phase = DragPhaseModel()   // not observed here: only `ChromeFade` follows it
+    @State private var screenFrame: CGRect = .zero
+    @State private var topBarFrame: CGRect = .zero
+    @State private var dockFrame: CGRect = .zero
     @State private var chromeVisible = true
     @State private var toast: LibraryStore.RatingEvent?
     @State private var sheet: Sheet?
@@ -85,19 +89,25 @@ struct ViewerScreen: View {
 
     var body: some View {
         ZStack {
-            GlancePalette.canvas(scheme).ignoresSafeArea()
+            GlancePalette.canvas(scheme)
+                .ignoresSafeArea()
+                .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { screenFrame = $0 }
+
+            photoArea
 
             VStack(spacing: 0) {
                 if chromeVisible {
-                    ChromeFade(phase: drag.phaseModel) { topBar }
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                    ChromeFade(phase: phase) {
+                        topBar.onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { topBarFrame = $0 }
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                photoArea
+                Spacer(minLength: 0)
                 if chromeVisible {
-                    ChromeFade(phase: drag.phaseModel) {
+                    ChromeFade(phase: phase) {
                         VStack(spacing: 10) {
                             toastView
-                            ratingDock
+                            ratingDock.onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { dockFrame = $0 }
                         }
                     }
                     .padding(.top, 8)
@@ -105,9 +115,6 @@ struct ViewerScreen: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-
-            StarRiseHUD(model: drag, count: starScale)
-            TrashRiseHUD(model: drag)
 
             if !chromeVisible { toastView.frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 40) }
 
@@ -161,33 +168,48 @@ struct ViewerScreen: View {
                 PhotoPager(
                     assets: store.visible,
                     currentID: store.currentID,
-                    drag: drag,
+                    phase: phase,
+                    starCount: starScale,
+                    starRowY: topBarFrame.height > 0 ? topBarFrame.midY : 0,
+                    fitInsets: fitInsets,
                     onPageChange: { id in
                         // A settled page: the only moment the store hears about swiping.
                         if store.currentID != id { store.currentID = id }
                     },
                     onSingleTap: { toggleChrome() },
-                    onCommit: { direction, x, y in commit(direction, x, y) },
+                    onZoomChange: { zoomed in
+                        // Like Photos: zooming in clears the screen for the picture.
+                        if zoomed, chromeVisible { chromeVisible = false }
+                    },
+                    onCommit: { outcome in commit(outcome) },
                     isDiscarded: { id in metadata.getMetadata(forKey: id).isDiscarded }
                 )
+                .ignoresSafeArea()
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-        .ignoresSafeArea(edges: chromeVisible ? [] : .all)
+    }
+
+    /// Room for the bars around a resting photo, in screen coordinates (none when the bars are hidden).
+    private var fitInsets: UIEdgeInsets {
+        guard chromeVisible, screenFrame.height > 0, topBarFrame.height > 0, dockFrame.height > 0 else { return .zero }
+        return UIEdgeInsets(top: max(0, topBarFrame.maxY - screenFrame.minY + 10), left: 0,
+                            bottom: max(0, screenFrame.maxY - dockFrame.minY + 10), right: 0)
     }
 
     // MARK: - Rating gestures
 
-    private func commit(_ direction: Int, _ x: CGFloat, _ y: CGFloat) {
-        if direction < 0 {
-            // The photo has just dropped into the trash: mark it.
-            store.discard(advance: autoAdvance && !currentMeta.isDiscarded)
-            return
+    private func commit(_ outcome: PullOutcome) {
+        switch outcome {
+        case .discard:
+            // The photo has just dropped into the bin: it stays in the pile (dropping it again changes nothing).
+            if !currentMeta.isDiscarded {
+                store.discard(advance: autoAdvance)
+            } else if autoAdvance {
+                store.next()
+            }
+        case .rate(let stars):
+            store.setRating(stars, advance: autoAdvance)
         }
-        // Pulled up: only a star the finger is actually on counts; anywhere else cancels.
-        guard let slot = RatingDragModel.slot(x: x, y: y, count: starScale, screenWidth: drag.screenWidth) else { return }
-        store.setRating(slot, advance: autoAdvance)
     }
 
     private func toggleChrome() {
