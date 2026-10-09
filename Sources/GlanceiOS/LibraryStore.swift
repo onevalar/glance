@@ -30,7 +30,14 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
 
     @Published private(set) var access: Access = .unknown
     /// Photos shown under the current filter, newest first.
-    @Published private(set) var visible: [PHAsset] = []
+    @Published private(set) var visible: [PHAsset] = [] {
+        didSet { indexByID = Dictionary(uniqueKeysWithValues: visible.enumerated().map { ($1.localIdentifier, $0) }) }
+    }
+    /// Position of each visible photo, so looking up the current index stays O(1) in huge libraries.
+    private var indexByID: [String: Int] = [:]
+    private var assetsByID: [String: PHAsset] = [:]
+    /// How many photos match each filter. Recomputed when ratings or the library change, never while drawing.
+    @Published private(set) var counts: [String: Int] = [:]
     @Published var currentID: String?
     @Published var filter: PhotoFilter = .all {
         didSet { if filter != oldValue { rebuild(preferIndex: currentIndex) } }
@@ -46,7 +53,7 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
 
     var currentIndex: Int? {
         guard let currentID else { return nil }
-        return visible.firstIndex { $0.localIdentifier == currentID }
+        return indexByID[currentID]
     }
 
     var currentAsset: PHAsset? {
@@ -102,7 +109,9 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
     private func reload() {
         loadAlbums()
         allAssets = fetchAssets(inAlbum: selectedAlbumID)
+        assetsByID = Dictionary(uniqueKeysWithValues: allAssets.map { ($0.localIdentifier, $0) })
         totalCount = allAssets.count
+        refreshCounts()
         rebuild(preferIndex: currentIndex)
     }
 
@@ -232,6 +241,11 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         }
     }
 
+    /// Sets the current photo's rating to exactly `stars` (0 clears it); used by the pull-up gesture.
+    func setRating(_ stars: Int, advance: Bool) {
+        change(advance: advance) { $0.setRating(stars) }
+    }
+
     /// Puts the current photo in the discard pile (nothing is deleted yet). Doing it again takes it back out.
     func discard(advance: Bool) {
         change(advance: advance) { meta in meta.setDiscarded(!meta.isDiscarded) }
@@ -263,12 +277,14 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         guard updated != previous else { return }
         metadata.updateMetadata(forKey: id) { $0 = updated }
         lastRating = RatingEvent(assetID: id, previous: previous, new: updated)
+        refreshCounts()
     }
 
     func undoLastRating() {
         guard let event = lastRating else { return }
         metadata.updateMetadata(forKey: event.assetID) { $0 = event.previous }
         lastRating = nil
+        refreshCounts()
         // Bring the photo back into view, even if the active filter had hidden it.
         let index = currentIndex
         rebuild(preferIndex: index)
@@ -277,13 +293,24 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
     }
 
     /// Number of photos in the current album that match `filter`.
-    func count(_ filter: PhotoFilter) -> Int {
-        allAssets.reduce(0) { $0 + (matches($1, filter) ? 1 : 0) }
+    func count(_ filter: PhotoFilter) -> Int { counts[filter.id] ?? 0 }
+
+    private func refreshCounts() {
+        var result: [String: Int] = [:]
+        var stars = [Int](repeating: 0, count: 6)
+        var unrated = 0, discarded = 0
+        for asset in allAssets {
+            let meta = metadata.getMetadata(forKey: asset.localIdentifier)
+            if meta.isDiscarded { discarded += 1 } else if meta.rating == 0 { unrated += 1 } else { stars[meta.rating] += 1 }
+        }
+        result[PhotoFilter.all.id] = allAssets.count
+        result[PhotoFilter.unrated.id] = unrated
+        result[PhotoFilter.discarded.id] = discarded
+        for n in 1...5 { result[PhotoFilter.stars(n).id] = stars[n] }
+        counts = result
     }
 
-    func asset(withID id: String) -> PHAsset? {
-        allAssets.first { $0.localIdentifier == id }
-    }
+    func asset(withID id: String) -> PHAsset? { assetsByID[id] }
 
     // MARK: - Deleting
 

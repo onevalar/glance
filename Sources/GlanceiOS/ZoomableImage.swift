@@ -31,13 +31,23 @@ final class CompareSyncHub {
 
 /// A pan that only starts for vertical movement, so horizontal swipes still turn the page.
 final class VerticalPanGestureRecognizer: UIPanGestureRecognizer {
+    private var startPoint: CGPoint = .zero
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        startPoint = touches.first?.location(in: view) ?? .zero
+        super.touchesBegan(touches, with: event)
+    }
+
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        if state == .possible {
-            let t = translation(in: view)
-            if abs(t.x) > 8 || abs(t.y) > 8 {
-                // Decide once: only a clearly sideways start belongs to the pager. A diagonal start is
-                // still a rating drag (the finger moves sideways to choose a star); the pager is locked then.
-                if abs(t.x) > abs(t.y) * 1.6 { state = .failed; return }
+        if state == .possible, let point = touches.first?.location(in: view) {
+            // Measured by hand from the touch itself: `translation` is only updated inside `super`, which may
+            // already start the gesture on a fast first move.
+            let dx = point.x - startPoint.x, dy = point.y - startPoint.y
+            if abs(dx) > 12 || abs(dy) > 12 {
+                // Decide once: only a movement that is clearly vertical (within about 25° of straight up/down)
+                // starts a rating drag. Everything else belongs to paging and zooming, so a sideways swipe
+                // with a little vertical drift can never rate or discard by accident.
+                if abs(dy) < abs(dx) * 2.2 { state = .failed; return }
             }
         }
         super.touchesMoved(touches, with: event)
@@ -60,15 +70,21 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     /// Rating by vertical drag while the photo is fitted: `offset` > 0 is dragged up (stars),
     /// < 0 dragged down (trash); `xFraction` is where the finger is across the screen (0…1), which picks the star.
     var ratingGesturesEnabled = true
-    var onVerticalDrag: ((_ offset: CGFloat, _ xFraction: CGFloat) -> Void)?
-    var onVerticalCommit: ((_ direction: Int, _ xFraction: CGFloat) -> Void)?
+    var onVerticalDrag: ((_ offset: CGFloat, _ xFraction: CGFloat, _ yFraction: CGFloat) -> Void)?
+    /// `direction` -1 = released far enough down (trash), +1 = released after pulling up (stars): the receiver
+    /// decides from the finger position whether a star was chosen.
+    var onVerticalCommit: ((_ direction: Int, _ xFraction: CGFloat, _ yFraction: CGFloat) -> Void)?
 
     var syncHub: CompareSyncHub? { didSet { syncHub?.register(self, id: syncID) } }
     var syncID = ""
 
-    private static let commitDistance: CGFloat = 96
+    /// Movement that is ignored before anything reacts, so a small drift never shows the stars or the trash.
+    private static let deadZone: CGFloat = 26
+    private static let commitDistance: CGFloat = 130
     private let ratingPan = VerticalPanGestureRecognizer()
 
+    /// Opacity the photo returns to after an animation (dimmed while it is in the discard pile).
+    var restingAlpha: CGFloat = 1
     private var needsFit = true
     private var lastBoundsSize: CGSize = .zero
     private var didReportZoomedIn = false
@@ -106,6 +122,22 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Called when a pager cell is recycled for another photo.
+    func resetForReuse() {
+        layer.removeAllAnimations()
+        layer.sublayerTransform = CATransform3DIdentity
+        imageView.layer.removeAllAnimations()
+        imageView.layer.cornerRadius = 0
+        imageView.alpha = 1
+        imageView.image = nil
+        imageView.transform = .identity
+        zoomScale = 1
+        contentOffset = .zero
+        didReportZoomedIn = false
+        needsFit = true
+        setNeedsLayout()
+    }
 
     // MARK: - Layout
 
@@ -183,37 +215,40 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     }
 
     /// Horizontal finger position across the window, 0…1.
-    private func fingerFraction(_ gesture: UIGestureRecognizer) -> CGFloat {
-        let width = window?.bounds.width ?? bounds.width
-        guard width > 0 else { return 0.5 }
-        return (gesture.location(in: nil).x / width).clamped(to: 0...1)
+    private func fingerFraction(_ gesture: UIGestureRecognizer) -> CGPoint {
+        let size = window?.bounds.size ?? bounds.size
+        guard size.width > 0, size.height > 0 else { return CGPoint(x: 0.5, y: 0.5) }
+        let point = gesture.location(in: nil)
+        return CGPoint(x: (point.x / size.width).clamped(to: 0...1), y: (point.y / size.height).clamped(to: 0...1))
     }
 
     @objc private func handleRatingPan(_ gesture: UIPanGestureRecognizer) {
         let translation = gesture.translation(in: self)
-        let x = fingerFraction(gesture)
+        let finger = fingerFraction(gesture)
         switch gesture.state {
         case .began, .changed:
             layer.removeAnimation(forKey: "dragTransform")
             imageView.layer.removeAnimation(forKey: "dragCorner")
-            applyDragVisuals(pull: translation.y)
-            onVerticalDrag?(-translation.y, x)
+            // Nothing moves or shows until the finger has travelled past the dead zone.
+            let beyond = max(0, abs(translation.y) - Self.deadZone) * (translation.y < 0 ? -1 : 1)
+            applyDragVisuals(pull: beyond)
+            onVerticalDrag?(-beyond, finger.x, finger.y)
         case .ended, .cancelled, .failed:
             let velocity = gesture.velocity(in: self).y
             let down = translation.y
             let up = -translation.y
             var direction = 0
             if gesture.state == .ended {
-                if down > Self.commitDistance || (velocity > 900 && down > 30) { direction = -1 }
-                else if up > Self.commitDistance || (velocity < -900 && up > 30) { direction = 1 }
+                if down > Self.commitDistance || (velocity > 1400 && down > 80) { direction = -1 }
+                else if up > Self.deadZone + 40 { direction = 1 }
             }
-            onVerticalDrag?(0, x)
+            onVerticalDrag?(0, finger.x, finger.y)
             switch direction {
             case -1:
-                dropIntoTrash { [weak self] in self?.onVerticalCommit?(-1, x) }
+                dropIntoTrash { [weak self] in self?.onVerticalCommit?(-1, finger.x, finger.y) }
             case 1:
                 springBack()
-                onVerticalCommit?(1, x)
+                onVerticalCommit?(1, finger.x, finger.y)
             default:
                 springBack()
             }
@@ -224,7 +259,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
 
     /// `pull` > 0 drags the photo down (it shrinks into a rounded card), < 0 drags it up (it recedes a little).
     private func applyDragVisuals(pull: CGFloat) {
-        let progress = min(abs(pull) / Self.commitDistance, 1)
+        let progress = min(abs(pull) / (Self.commitDistance - Self.deadZone), 1)
         let scale: CGFloat
         let translationY: CGFloat
         if pull >= 0 {
@@ -279,7 +314,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
             self?.layer.sublayerTransform = CATransform3DIdentity
             self?.imageView.layer.cornerRadius = 0
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                UIView.animate(withDuration: 0.25) { self?.imageView.alpha = 1 }
+                UIView.animate(withDuration: 0.25) { self?.imageView.alpha = self?.restingAlpha ?? 1 }
             }
         }
         let move = CABasicAnimation(keyPath: "sublayerTransform")
@@ -370,8 +405,8 @@ struct ZoomableImage: UIViewRepresentable {
     var onZoomChange: (Bool) -> Void
     var onSingleTap: () -> Void
     var onZoomedIn: () -> Void
-    var onVerticalDrag: (CGFloat, CGFloat) -> Void = { _, _ in }
-    var onVerticalCommit: (Int, CGFloat) -> Void = { _, _ in }
+    var onVerticalDrag: (CGFloat, CGFloat, CGFloat) -> Void = { _, _, _ in }
+    var onVerticalCommit: (Int, CGFloat, CGFloat) -> Void = { _, _, _ in }
 
     func makeUIView(context: Context) -> ZoomingScrollView {
         let view = ZoomingScrollView()

@@ -1,6 +1,6 @@
 import XCTest
 
-/// Drives the real app in the simulator: rating by swiping, undo, the grid and the comparison screen.
+/// Drives the real app in the simulator: rating by pulling, discard, undo, filters, comparison, settings.
 final class GestureTests: XCTestCase {
     private var app: XCUIApplication!
     /// Screenshots land here when GLANCE_UITEST_SHOTS is set.
@@ -9,14 +9,8 @@ final class GestureTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-didShowGestureGuide", "YES", "-resetRatings", "YES", "-didShowCompareHint", "NO"]
-        addUIInterruptionMonitor(withDescription: "Photos permission") { alert in
-            for label in ["允许完全访问", "Allow Full Access"] where alert.buttons[label].exists {
-                alert.buttons[label].tap()
-                return true
-            }
-            return false
-        }
+        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-didShowGestureGuide", "YES",
+                                "-resetRatings", "YES", "-didShowCompareHint", "NO"]
         app.launch()
         // First run on a fresh simulator: accept the photo-library prompt.
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -28,6 +22,9 @@ final class GestureTests: XCTestCase {
 
     private var pager: XCUIElement { app.descendants(matching: .any)["viewer.pager"].firstMatch }
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }
+    /// "02 / 12": the position shown in the scope pill.
+    private var position: String { (element("top.scope").value as? String) ?? "" }
+    private var screenWidth: CGFloat { app.windows.firstMatch.frame.width }
 
     private func shot(_ name: String) {
         guard let shotDirectory else { return }
@@ -35,91 +32,204 @@ final class GestureTests: XCTestCase {
         try? data.write(to: URL(fileURLWithPath: shotDirectory).appendingPathComponent("\(name).png"))
     }
 
-    /// Drag from a point on the screen to another (both in 0…1 screen fractions) and release.
-    private func drag(from: CGVector, to: CGVector, hold: TimeInterval = 0.05) {
-        let start = app.coordinate(withNormalizedOffset: from)
-        let end = app.coordinate(withNormalizedOffset: to)
-        start.press(forDuration: hold, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.25)
+    private func at(_ x: CGFloat, _ y: CGFloat) -> XCUICoordinate {
+        app.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y))
     }
 
-    func testDragUpRightEndGivesFiveStars() throws {
-        let before = element("top.counter").label
-        shot("01-start")
-        // Up and to the right edge: the last of five stars.
-        drag(from: CGVector(dx: 0.5, dy: 0.55), to: CGVector(dx: 0.95, dy: 0.25))
+    /// Drag from one screen point to another (0…1 fractions) and release.
+    private func drag(_ from: (CGFloat, CGFloat), _ to: (CGFloat, CGFloat), hold: TimeInterval = 0.25) {
+        at(from.0, from.1).press(forDuration: 0.05, thenDragTo: at(to.0, to.1), withVelocity: .slow, thenHoldForDuration: hold)
+    }
+
+    /// Horizontal centre (0…1) of slot `k` in the star row: 0 = clear, 1…5 = stars (matches `RatingDragModel.slot`).
+    private func slotX(_ k: Int, slots: Int = 6) -> CGFloat {
+        let inset: CGFloat = 18
+        return (inset + (CGFloat(k) + 0.5) / CGFloat(slots) * (screenWidth - inset * 2)) / screenWidth
+    }
+
+    private let bandY: CGFloat = 0.33
+
+    // MARK: - Rating by pulling up
+
+    func testPullUpOntoFifthStarGivesFiveStars() throws {
+        let before = position
+        drag((0.5, 0.78), (slotX(5), bandY))
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), "rating shows the undo toast")
-        XCTAssertNotEqual(element("top.counter").label, before, "advances to the next photo")
+        sleep(1)
+        shot("14-after-five")
+        XCTAssertNotEqual(position, before, "advances to the next photo")
         pager.swipeRight()
-        XCTAssertTrue(element("badge.stars.5").waitForExistence(timeout: 3), "five stars badge")
-        shot("03-badge")
+        XCTAssertTrue(element("dock.star.5").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("dock.star.5").isSelected, "the first photo now has five stars")
     }
 
-    func testDragUpLeftEndGivesOneStar() throws {
-        drag(from: CGVector(dx: 0.5, dy: 0.55), to: CGVector(dx: 0.06, dy: 0.25))
+    func testPullUpOntoFirstStarGivesOneStar() throws {
+        drag((0.5, 0.78), (slotX(1), bandY))
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
         pager.swipeRight()
-        XCTAssertTrue(element("badge.stars.1").waitForExistence(timeout: 3), "one star badge")
+        XCTAssertTrue(element("dock.star.1").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("dock.star.1").isSelected, "one star")
     }
 
-    func testStarsAppearWhileDraggingUp() throws {
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.3))
-        // Capture while the finger is still down at the end of the drag.
+    func testReleasingAwayFromTheStarsCancels() throws {
+        let before = position
+        drag((0.5, 0.78), (0.5, 0.60))          // pulled up, but never reached the star row
+        XCTAssertFalse(element("toast.undo").waitForExistence(timeout: 2), "nothing was rated")
+        XCTAssertEqual(position, before)
+        for star in 1...5 { XCTAssertFalse(element("dock.star.\(star)").isSelected) }
+    }
+
+    func testPullUpOntoTheClearSlotRemovesTheRating() throws {
+        element("dock.star.3").tap()           // rates and moves on
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+        Thread.sleep(forTimeInterval: 0.8)     // let the auto-advance settle before paging back
+        pager.swipeRight()
+        let three = element("dock.star.3")
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: three)
+        XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 4), .completed, "the rated photo comes back with 3 stars")
+        drag((0.5, 0.78), (slotX(0), bandY))
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+        XCTAssertFalse(element("dock.star.3").isSelected, "rating cleared")
+    }
+
+    func testStarsRiseWhilePulling() throws {
+        let end = at(slotX(3), bandY)
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.4) { self.shot("08-stars-hud") }
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.0)
+        at(0.5, 0.78).press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.0)
         Thread.sleep(forTimeInterval: 0.5)
     }
 
+    func testStarsShowNothingLitUntilFingerIsOnAStar() throws {
+        let end = at(0.5, 0.52)                 // pulled up, still below the row
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.4) { self.shot("08-stars-not-on-row") }
+        at(0.5, 0.78).press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.0)
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+
+    // MARK: - Discard by pulling down
+
     func testPullDownDiscardsAndUndoRestores() throws {
-        drag(from: CGVector(dx: 0.5, dy: 0.35), to: CGVector(dx: 0.5, dy: 0.75))
+        drag((0.5, 0.35), (0.5, 0.82))
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), "discard shows the undo toast")
         element("toast.undo").tap()
-        XCTAssertFalse(element("badge.discarded").waitForExistence(timeout: 2), "undo removes the discard mark")
+        XCTAssertFalse(element("dock.discard").isSelected, "undo takes the photo out of the discard pile")
     }
 
     func testPullDownMarksDiscardedNotDeleted() throws {
-        drag(from: CGVector(dx: 0.5, dy: 0.35), to: CGVector(dx: 0.5, dy: 0.75))
+        drag((0.5, 0.35), (0.5, 0.82))
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
-        element("filter.menu").tap()
+        element("top.scope").tap()
         element("filter.discarded").tap()
-        XCTAssertTrue(element("badge.discarded").waitForExistence(timeout: 3), "the discard pile still holds the photo")
+        XCTAssertTrue(element("dock.discard").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("dock.discard").isSelected, "the discard pile still holds the photo")
         shot("09-discard-pile")
     }
 
-    func testTrashAppearsWhileDraggingDown() throws {
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+    func testTrashRisesWhilePulling() throws {
+        let end = at(0.5, 0.78)
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.4) { self.shot("08-trash-hud") }
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.0)
+        at(0.5, 0.35).press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.0)
         Thread.sleep(forTimeInterval: 0.5)
     }
 
-    /// Part-way down: the lid is only partly open and the photo is still large.
     func testTrashHalfway() throws {
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.46))
+        let end = at(0.5, 0.52)
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.4) { self.shot("08-trash-half") }
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.0)
+        at(0.5, 0.35).press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.0)
         Thread.sleep(forTimeInterval: 0.5)
     }
 
-    func testDockStarsAndDiscardRate() throws {
-        shot("10-dock")
-        element("dock.star.3").tap()
-        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), "dock rating shows the undo toast")
-        shot("13-after-dock-rate")
+    // MARK: - No accidental triggers
+
+    func testSmallPullDoesNothing() throws {
+        drag((0.5, 0.50), (0.5, 0.58))
+        drag((0.5, 0.50), (0.5, 0.43))
+        XCTAssertFalse(element("toast.undo").waitForExistence(timeout: 2), "a small vertical drift rates nothing")
+    }
+
+    func testSidewaysSwipeWithDriftTurnsThePageOnly() throws {
+        let before = position
+        // Mostly sideways with a little downward drift, at flick speed.
+        at(0.85, 0.50).press(forDuration: 0.05, thenDragTo: at(0.15, 0.60), withVelocity: .fast, thenHoldForDuration: 0)
+        sleep(1)
+        shot("14-after-drift")
+        XCTAssertNotEqual(position, before, "the page turned")
+        XCTAssertFalse(element("toast.undo").exists, "and nothing was rated or discarded")
+    }
+
+    func testSlowSidewaysDragTurnsThePage() throws {
+        let before = position
+        drag((0.85, 0.50), (0.15, 0.50), hold: 0.05)
+        sleep(1)
+        XCTAssertNotEqual(position, before, "a slow, straight sideways drag turns the page too")
+    }
+
+    func testHorizontalPaging() throws {
+        let start = position
+        pager.swipeLeft()
+        sleep(1)
+        let afterLeft = position
         pager.swipeRight()
         sleep(1)
-        shot("13-after-swipe-back")
-        XCTAssertTrue(element("badge.stars.3").waitForExistence(timeout: 3), "three stars badge")
+        XCTAssertNotEqual(start, afterLeft, "swipe left goes to the next photo")
+        XCTAssertEqual(start, position, "swipe right comes back")
     }
 
-    func testBrowseGrid() throws {
-        element("top.grid").tap()
+    // MARK: - Dock, filters, scope
+
+    func testDockStarsRate() throws {
+        shot("10-dock")
+        element("dock.star.3").tap()
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+        pager.swipeRight()
+        XCTAssertTrue(element("dock.star.3").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("dock.star.3").isSelected)
+    }
+
+    func testDockDiscardMarksThePhoto() throws {
+        element("dock.discard").tap()
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+        pager.swipeRight()
+        XCTAssertTrue(element("dock.discard").isSelected)
+    }
+
+    func testStarFilterFromTheScopeMenu() throws {
+        element("dock.star.4").tap()
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+        element("top.scope").tap()
+        shot("06-scope-menu")
+        element("filter.stars4").tap()
+        XCTAssertTrue(element("dock.star.4").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("dock.star.4").isSelected, "the 4-star filter shows the rated photo")
+        shot("06-star-filter")
+    }
+
+    func testEachActionAppearsOnce() throws {
+        // The compare entry is in the dock only; the more-menu has no second copy.
+        element("top.more").tap()
+        XCTAssertTrue(app.buttons["设置"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons["选择照片对比…"].exists, "no second compare entry in the menu")
+        XCTAssertFalse(element("top.counter").exists, "position lives inside the scope pill, not beside it")
+    }
+
+    func testTapHidesAndShowsTheBars() throws {
+        XCTAssertTrue(element("dock.star.3").exists)
+        pager.tap()
+        sleep(1)
+        XCTAssertFalse(element("dock.star.3").exists, "bars hidden for a clean full-screen photo")
+        shot("11-immersive")
+        pager.tap()
+        XCTAssertTrue(element("dock.star.3").waitForExistence(timeout: 2))
+    }
+
+    // MARK: - Overview, comparison, settings, guide
+
+    func testPhotosGrid() throws {
+        element("top.photos").tap()
         sleep(1)
         shot("04a-grid")
-        XCTAssertTrue(app.buttons["选择"].waitForExistence(timeout: 3), "browse grid offers 选择")
-        app.buttons["完成"].tap()
+        XCTAssertTrue(element("grid.close").waitForExistence(timeout: 3))
+        element("grid.close").tap()
         XCTAssertTrue(pager.waitForExistence(timeout: 5))
     }
 
@@ -144,20 +254,10 @@ final class GestureTests: XCTestCase {
         XCTAssertTrue(pager.waitForExistence(timeout: 5))
     }
 
-    func testStarFilter() throws {
-        element("dock.star.4").tap()
-        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
-        element("filter.menu").tap()
-        element("filter.stars4").tap()
-        XCTAssertTrue(element("badge.stars.4").waitForExistence(timeout: 3), "4-star filter shows the rated photo")
-        shot("06-star-filter")
-    }
-
     func testSettingsStarScale() throws {
         element("top.more").tap()
         element("menu.settings").tap()
-        let scale = element("settings.starScale")
-        XCTAssertTrue(scale.waitForExistence(timeout: 3))
+        XCTAssertTrue(element("settings.starScale").waitForExistence(timeout: 3))
         app.segmentedControls.buttons["3 星"].tap()
         shot("12-settings")
         app.buttons["完成"].tap()
@@ -177,23 +277,10 @@ final class GestureTests: XCTestCase {
         XCTAssertFalse(element("guide.start").exists)
     }
 
-    /// Reaches a real photo and captures the glass controls over it.
-    func testGlassOverRealPhoto() throws {
+    /// Reaches a real photo and captures the layout over it.
+    func testLayoutOverRealPhoto() throws {
         for _ in 0..<5 { pager.swipeLeft() }
         sleep(2)
-        shot("11-over-photo-\(ProcessInfo.processInfo.environment["GLANCE_UITEST_TAG"] ?? "x")")
-    }
-
-    func testHorizontalPaging() throws {
-        let start = element("top.counter").label
-        pager.swipeLeft()
-        sleep(1)
-        let afterLeft = element("top.counter").label
-        pager.swipeRight()
-        sleep(1)
-        let afterRight = element("top.counter").label
-        NSLog("PAGINGDEBUG start=\(start) left=\(afterLeft) right=\(afterRight)")
-        XCTAssertNotEqual(start, afterLeft, "swipe left goes to the next photo")
-        XCTAssertEqual(start, afterRight, "swipe right comes back")
+        shot("13-layout-\(ProcessInfo.processInfo.environment["GLANCE_UITEST_TAG"] ?? "x")")
     }
 }

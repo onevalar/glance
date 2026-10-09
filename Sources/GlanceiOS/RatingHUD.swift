@@ -69,9 +69,9 @@ struct TrashCanIcon: View {
 
 /// The trash that rises from the bottom edge as the photo is pulled down.
 struct TrashRiseHUD: View {
-    /// 0…1 while pulling.
-    var progress: CGFloat
+    @ObservedObject var model: RatingDragModel
 
+    private var progress: CGFloat { min(max(-model.offset / 104, 0), 1) }
     private var ready: Bool { progress >= 1 }
 
     var body: some View {
@@ -94,6 +94,7 @@ struct TrashRiseHUD: View {
             .opacity(Double(min(1, progress * 2.4)))
             .padding(.bottom, 56)
         }
+        .opacity(model.offset < 0 ? 1 : 0)
         .animation(.spring(duration: 0.28, bounce: 0.3), value: ready)
         .sensoryFeedback(.impact(weight: .medium), trigger: ready)
         .allowsHitTesting(false)
@@ -101,52 +102,89 @@ struct TrashRiseHUD: View {
     }
 }
 
-// MARK: - Stars (rise as the photo is pulled up; the star under the finger is the rating)
+// MARK: - Stars (a row that rises as the photo is pulled up; only the star the finger is actually on is chosen)
+
+extension RatingDragModel {
+    /// Slot 0 is "clear the rating", 1…count are the stars. nil = the finger is not on the row, so releasing cancels.
+    static func slot(x: CGFloat, y: CGFloat, count: Int, screenWidth: CGFloat) -> Int? {
+        guard abs(y - bandCenter) <= bandHalfHeight, screenWidth > 0 else { return nil }
+        let inset = StarRiseHUD.sideInset
+        let usable = max(screenWidth - inset * 2, 1)
+        let slots = count + 1
+        let relative = (x * screenWidth - inset) / usable
+        return min(max(Int(relative * CGFloat(slots)), 0), slots - 1)
+    }
+}
 
 struct StarRiseHUD: View {
-    /// 0…1 while pulling.
-    var progress: CGFloat
+    /// Space between the screen edge and the star row: the finger-to-slot mapping depends on it.
+    static let sideInset: CGFloat = 18
+
+    @ObservedObject var model: RatingDragModel
     var count: Int
-    /// Currently selected star (1…count) from the finger's horizontal position.
-    var selected: Int
+    /// The photo's current rating, shown so a re-rate is not a surprise.
+    var current: Int
+
+    private var progress: CGFloat { min(max(model.offset / 60, 0), 1) }
 
     var body: some View {
         GeometryReader { proxy in
+            let width = proxy.size.width
+            let slot = RatingDragModel.slot(x: model.fingerX, y: model.fingerY, count: count, screenWidth: width)
+            let lit = max(slot ?? 0, 0)
             VStack(spacing: 12) {
                 HStack(spacing: 0) {
+                    // Slot 0: clear the rating.
+                    Image(systemName: "xmark")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(slot == 0 ? Color.red : Color.primary.opacity(0.5))
+                        .scaleEffect(slot == 0 ? 1.25 : 1)
+                        .frame(maxWidth: .infinity)
                     ForEach(1...count, id: \.self) { index in
-                        let on = index <= selected
+                        let on = index <= lit
                         Image(systemName: on ? "star.fill" : "star")
-                            .font(.system(size: 36, weight: .semibold))
-                            .foregroundStyle(on ? AnyShapeStyle(LinearGradient(colors: [Color(red: 1, green: 0.86, blue: 0.3),
-                                                                                        Color(red: 1, green: 0.62, blue: 0.1)],
-                                                                               startPoint: .top, endPoint: .bottom))
-                                                : AnyShapeStyle(Color.primary.opacity(0.55)))
-                            .scaleEffect(index == selected ? 1.34 : (on ? 1.06 : 0.94))
-                            .offset(y: index == selected ? -6 : 0)
-                            .shadow(color: on ? Color.orange.opacity(0.5) : .clear, radius: index == selected ? 12 : 4)
+                            .font(.system(size: 34, weight: .semibold))
+                            .foregroundStyle(on ? AnyShapeStyle(LinearGradient(
+                                colors: [Color(red: 1, green: 0.86, blue: 0.3), Color(red: 1, green: 0.62, blue: 0.1)],
+                                startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(Color.primary.opacity(0.45)))
+                            .scaleEffect(index == slot ? 1.34 : (on ? 1.05 : 0.95))
+                            .offset(y: index == slot ? -6 : 0)
+                            .shadow(color: on ? Color.orange.opacity(0.45) : .clear, radius: index == slot ? 12 : 3)
                             .frame(maxWidth: .infinity)
-                            .animation(.spring(duration: 0.22, bounce: 0.5), value: selected)
                     }
                 }
-                .padding(.vertical, 18)
-                .padding(.horizontal, 6)
+                .padding(.vertical, 16)
+                .padding(.horizontal, 0)
+                .frame(height: 78)
                 .glassSurface(.capsule)
+                .padding(.horizontal, Self.sideInset)
 
-                Text("\(selected) 星")
-                    .font(.system(size: 17, weight: .bold))
-                    .monospacedDigit()
-                    .padding(.horizontal, 16).padding(.vertical, 7)
+                Text(hint(for: slot))
+                    .font(.system(size: 15, weight: .semibold))
+                    .padding(.horizontal, 14).padding(.vertical, 7)
                     .glassSurface(.capsule)
+                    .foregroundStyle(slot == nil ? Color.secondary : Color.primary)
             }
-            .padding(.horizontal, 12)
-            .frame(width: proxy.size.width)
-            .offset(y: proxy.size.height * 0.30 + (1 - progress) * 90)
-            .opacity(Double(min(1, progress * 2.4)))
-            .scaleEffect(0.92 + 0.08 * progress)
+            .animation(.spring(duration: 0.2, bounce: 0.45), value: slot)
+            .frame(width: width)
+            .position(x: width / 2, y: proxy.size.height * RatingDragModel.bandCenter)
+            .opacity(Double(progress))
+            .scaleEffect(0.94 + 0.06 * progress)
+            .onAppear { model.screenWidth = width }
+            .onChange(of: width) { _, new in model.screenWidth = new }
         }
-        .sensoryFeedback(.selection, trigger: selected)
+        .opacity(model.offset > 0 ? 1 : 0)
+        .sensoryFeedback(.selection, trigger: RatingDragModel.slot(x: model.fingerX, y: model.fingerY, count: count,
+                                                                      screenWidth: model.screenWidth))
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    private func hint(for slot: Int?) -> String {
+        switch slot {
+        case nil: return "滑到星星上再松手；离开星星松手＝取消"
+        case 0: return "松手清除评分"
+        case let n?: return "松手评 \(n) 星"
+        }
     }
 }

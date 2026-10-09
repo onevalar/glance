@@ -6,20 +6,62 @@
 import Photos
 import SwiftUI
 
-/// Overview of the current photos.
-/// - Browse: tap a photo to jump to it; "选择" starts picking.
-/// - Compare picker (opened from the dock's 对比 button): the current photo is already selected,
-///   tap 1–3 more, then press the big 开始对比 button.
+/// All photos of the current scope as a grid: tap one to jump to it. (Picking photos to compare is a separate screen.)
 struct PhotoGridView: View {
     @EnvironmentObject private var store: LibraryStore
     @ObservedObject private var metadata = MetadataManager.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
-    let pickForCompare: Bool
+    private let columns = [GridItem(.adaptive(minimum: 104, maximum: 180), spacing: 3)]
+
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { reader in
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 3) {
+                        ForEach(store.visible, id: \.localIdentifier) { asset in
+                            GridCell(
+                                asset: asset,
+                                meta: metadata.getMetadata(forKey: asset.localIdentifier),
+                                isCurrent: asset.localIdentifier == store.currentID,
+                                selectionIndex: nil,
+                                selecting: false
+                            )
+                            .id(asset.localIdentifier)
+                            .onTapGesture {
+                                store.select(asset)
+                                dismiss()
+                            }
+                        }
+                    }
+                    .padding(3)
+                }
+                .onAppear {
+                    if let id = store.currentID { reader.scrollTo(id, anchor: .center) }
+                }
+            }
+            .background(GlancePalette.canvas(scheme))
+            .navigationTitle("\(store.visible.count) 张照片")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }.accessibilityIdentifier("grid.close")
+                }
+            }
+        }
+    }
+}
+
+/// Pick two or more photos (any number) to compare side by side. The current photo is already ticked.
+struct ComparePickerView: View {
+    @EnvironmentObject private var store: LibraryStore
+    @ObservedObject private var metadata = MetadataManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+
     var onCompare: ([String]) -> Void
 
-    @State private var selecting = false
     @State private var selected: [String] = []
 
     /// Comparing many shots at once is allowed; this only keeps memory in check.
@@ -35,58 +77,42 @@ struct PhotoGridView: View {
                         GridCell(
                             asset: asset,
                             meta: metadata.getMetadata(forKey: asset.localIdentifier),
-                            isCurrent: asset.localIdentifier == store.currentID,
+                            isCurrent: false,
                             selectionIndex: selected.firstIndex(of: asset.localIdentifier).map { $0 + 1 },
-                            selecting: selecting
+                            selecting: true
                         )
                         .onTapGesture { tap(asset) }
-                        .onLongPressGesture(minimumDuration: 0.35) { beginSelecting(with: asset) }
                     }
                 }
                 .padding(3)
-                .padding(.bottom, selecting ? 110 : 0)
+                .padding(.bottom, 120)
             }
             .background(GlancePalette.canvas(scheme))
-            .overlay(alignment: .bottom) { if selecting { compareBar } }
-            .navigationTitle(title)
+            .overlay(alignment: .bottom) { startBar }
+            .navigationTitle(selected.isEmpty ? "选择要对比的照片" : "已选 \(selected.count) 张")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if selecting && !pickForCompare {
-                        Button("取消") { endSelecting() }
-                    } else {
-                        Button(pickForCompare ? "取消" : "完成") { dismiss() }
-                            .accessibilityIdentifier("grid.close")
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    if !selecting {
-                        Button("选择") { selecting = true }
-                            .accessibilityIdentifier("grid.select")
-                    }
+                    Button("取消") { dismiss() }.accessibilityIdentifier("grid.close")
                 }
             }
         }
         .onAppear {
-            if pickForCompare, !selecting {
-                selecting = true
-                if let id = store.currentID { selected = [id] }
-            }
+            if selected.isEmpty, let id = store.currentID { selected = [id] }
         }
     }
 
-    private var title: String {
-        if selecting { return selected.isEmpty ? "选择要对比的照片" : "已选 \(selected.count) 张" }
-        return "\(store.visible.count) 张照片"
-    }
-
-    /// Bottom glass panel: says what to do, and holds the one big action.
-    private var compareBar: some View {
+    private var startBar: some View {
         VStack(spacing: 10) {
             Text(selected.count < 2 ? "再点几张照片（至少 2 张，数量不限）" : "已选 \(selected.count) 张，可以开始对比了")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
-            Button(action: startCompare) {
+            Button {
+                let ids = selected
+                dismiss()
+                // Present after this screen has gone, otherwise SwiftUI drops the second cover.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompare(ids) }
+            } label: {
                 Label("开始对比（\(selected.count)）", systemImage: "rectangle.split.2x1")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(selected.count >= 2 ? Color.white : Color.secondary)
@@ -106,39 +132,15 @@ struct PhotoGridView: View {
         .padding(.bottom, 8)
     }
 
-    private func startCompare() {
-        let ids = selected
-        dismiss()
-        // Present after the grid has gone, otherwise SwiftUI drops the second cover.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { onCompare(ids) }
-    }
-
     private func tap(_ asset: PHAsset) {
         let id = asset.localIdentifier
-        if selecting {
-            if let index = selected.firstIndex(of: id) {
-                selected.remove(at: index)
-            } else if selected.count < Self.maxCompare {
-                selected.append(id)
-            } else {
-                UINotificationFeedbackGenerator().notificationOccurred(.warning)
-            }
+        if let index = selected.firstIndex(of: id) {
+            selected.remove(at: index)
+        } else if selected.count < Self.maxCompare {
+            selected.append(id)
         } else {
-            store.select(asset)
-            dismiss()
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
         }
-    }
-
-    private func beginSelecting(with asset: PHAsset) {
-        guard !selecting else { return }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        selecting = true
-        selected = [asset.localIdentifier]
-    }
-
-    private func endSelecting() {
-        selecting = false
-        selected = []
     }
 }
 
