@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 128 128" style="display: inline-block; flex-shrink: 0">
+  <defs><clipPath id="_21S-0__wo3ym10"><path d="M36 0H92C117.9 0 128 10.1 128 36V92C128 117.9 117.9 128 92 128H36C10.1 128 0 117.9 0 92V36C0 10.1 10.1 0 36 0Z"/></clipPath><linearGradient id="_21S-0__wo3ym11" x1="15" y1="0" x2="110" y2="128" gradientUnits="userSpaceOnUse"><stop stop-color="#76AAF8"/><stop offset=".55" stop-color="#2865CD"/><stop offset="1" stop-color="#163D91"/></linearGradient><radialGradient id="_21S-0__wo3ym12" cx="0.18" cy="0.02" r="0.9"><stop stop-color="#FFFFFF" stop-opacity=".38"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient><linearGradient id="_21S-0__wo3ym13" x1="36" y1="26" x2="78" y2="106" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#DFE9FD"/></linearGradient><linearGradient id="_21S-0__wo3ym14" x1="53" y1="58" x2="99" y2="102" gradientUnits="userSpaceOnUse"><stop stop-color="#D3E1FB"/><stop offset="1" stop-color="#A9C3F1"/></linearGradient><linearGradient id="_21S-0__wo3ym15" x1="42" y1="35" x2="90" y2="94" gradientUnits="userSpaceOnUse"><stop stop-color="#163D91"/><stop offset="1" stop-color="#76AAF8"/></linearGradient><linearGradient id="_21S-0__wo3ym16" x1="64" y1="0" x2="64" y2="128" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF" stop-opacity=".6"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="1" stop-color="#001240" stop-opacity=".4"/></linearGradient><filter id="_21S-0__wo3ym17" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="2" dy="5" stdDeviation="3" flood-color="#071C50" flood-opacity=".3"/></filter></defs>
+  <g clip-path="url(#_21S-0__wo3ym10)">
+    <path d="M36 0H92C117.9 0 128 10.1 128 36V92C128 117.9 117.9 128 92 128H36C10.1 128 0 117.9 0 92V36C0 10.1 10.1 0 36 0Z" fill="url(#_21S-0__wo3ym11)" />
+    <path d="M36 0H92C117.9 0 128 10.1 128 36V92C128 117.9 117.9 128 92 128H36C10.1 128 0 117.9 0 92V36C0 10.1 10.1 0 36 0Z" fill="url(#_21S-0__wo3ym12)" />
+    <g transform="translate(0 0)">
+      <rect x="24" y="24" width="80" height="80" rx="8" fill="url(#_21S-0__wo3ym13)" />
+      <rect x="32" y="32" width="64" height="64" rx="2" fill="url(#_21S-0__wo3ym15)" />
+      <circle cx="80" cy="48" r="8" fill="#FFFFFF" />
+      <path d="M32 84L48 66L54 66L62 52C66 71 70 85 80 96H32Z" fill="url(#_21S-0__wo3ym13)" />
+      <path d="M62 52L84 79Q90 91 96 96H80C70 85 66 71 62 52Z" fill="url(#_21S-0__wo3ym14)" />
+    </g>
+  </g>
+  <path d="M36 0H92C117.9 0 128 10.1 128 36V92C128 117.9 117.9 128 92 128H36C10.1 128 0 117.9 0 92V36C0 10.1 10.1 0 36 0Z" fill="none" stroke="url(#_21S-0__wo3ym16)" stroke-width="1.5" />
+</svg>
