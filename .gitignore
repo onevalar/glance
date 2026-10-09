@@ -7,3 +7,6 @@ build/
 *.xcuserstate
 build-ios/
 build-mac/
+build-ios-dev/
+build-ios-pad/
+build-*/
