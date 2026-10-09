@@ -21,7 +21,7 @@ struct GestureGuide: View {
                     .font(.system(size: 24, weight: .semibold))
                     .padding(.bottom, 4)
 
-                row("star.fill", .yellow, "往上滑，星星升起", "手指移到哪颗星、在那里松手，就评几星；松手时不在星星上＝取消")
+                row("star.fill", .yellow, "往上滑，星星升起", "手指移到哪颗星、在那里松手，就评几星；往回退、不在星星上松手＝取消")
                 row("trash", .red, "往下拉，垃圾桶升起", "拖到垃圾桶松手＝丢弃，不会立刻删除")
                 row("arrow.left.and.right", .white, "左右滑动", "切换照片，点一下照片隐藏所有按钮")
                 row("plus.magnifyingglass", .white, "双击或双指张开", "放大看细节")

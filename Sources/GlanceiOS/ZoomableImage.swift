@@ -70,6 +70,8 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     /// Rating by vertical drag while the photo is fitted: `offset` > 0 is dragged up (stars),
     /// < 0 dragged down (trash); `xFraction` is where the finger is across the screen (0…1), which picks the star.
     var ratingGesturesEnabled = true
+    /// Window position of the trash opening; the discarded photo flies there.
+    var trashTarget: (() -> CGPoint?)?
     var onVerticalDrag: ((_ offset: CGFloat, _ xFraction: CGFloat, _ yFraction: CGFloat) -> Void)?
     /// `direction` -1 = released far enough down (trash), +1 = released after pulling up (stars): the receiver
     /// decides from the finger position whether a star was chosen.
@@ -242,10 +244,17 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
                 if down > Self.commitDistance || (velocity > 1400 && down > 80) { direction = -1 }
                 else if up > Self.deadZone + 40 { direction = 1 }
             }
-            onVerticalDrag?(0, finger.x, finger.y)
+            if direction != -1 { onVerticalDrag?(0, finger.x, finger.y) }
             switch direction {
             case -1:
-                dropIntoTrash { [weak self] in self?.onVerticalCommit?(-1, finger.x, finger.y) }
+                // The trash stays on screen until the photo has gone into it.
+                dropIntoTrash { [weak self] in
+                    self?.onVerticalCommit?(-1, finger.x, finger.y)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                        guard let self, self.ratingPan.state == .possible else { return }
+                        self.onVerticalDrag?(0, finger.x, finger.y)
+                    }
+                }
             case 1:
                 springBack()
                 onVerticalCommit?(1, finger.x, finger.y)
@@ -301,7 +310,13 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     /// The photo, already a small card, drops toward the trash that has risen at the bottom and disappears.
     private func dropIntoTrash(completion: @escaping () -> Void) {
         let from = layer.presentation()?.sublayerTransform ?? layer.sublayerTransform
-        var target = CATransform3DMakeTranslation(0, bounds.height * 0.40, 0)
+        var dx: CGFloat = 0, dy = bounds.height * 0.40
+        if window != nil, let point = trashTarget?() {
+            let local = convert(point, from: nil)
+            dx = local.x - bounds.midX
+            dy = local.y - bounds.midY
+        }
+        var target = CATransform3DMakeTranslation(dx, dy, 0)
         target = CATransform3DRotate(target, 0.18, 0, 0, 1)
         target = CATransform3DScale(target, 0.10, 0.10, 1)
 
@@ -320,7 +335,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
         let move = CABasicAnimation(keyPath: "sublayerTransform")
         move.fromValue = from
         move.toValue = target
-        move.duration = 0.26
+        move.duration = 0.32
         move.timingFunction = CAMediaTimingFunction(name: .easeIn)
         layer.sublayerTransform = target
         layer.add(move, forKey: "dragTransform")
@@ -328,7 +343,9 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = 1
         fade.toValue = 0
-        fade.duration = 0.26
+        fade.duration = 0.16
+        fade.beginTime = CACurrentMediaTime() + 0.16      // stays visible until it is small, then vanishes into the opening
+        fade.fillMode = .both
         fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
         imageView.layer.opacity = 0
         imageView.layer.add(fade, forKey: "dropFade")

@@ -41,10 +41,10 @@ final class GestureTests: XCTestCase {
         at(from.0, from.1).press(forDuration: 0.05, thenDragTo: at(to.0, to.1), withVelocity: .slow, thenHoldForDuration: hold)
     }
 
-    /// Horizontal centre (0…1) of slot `k` in the star row: 0 = clear, 1…5 = stars (matches `RatingDragModel.slot`).
-    private func slotX(_ k: Int, slots: Int = 6) -> CGFloat {
+    /// Horizontal centre (0…1) of star `k` (1…5) in the star row (matches `RatingDragModel.slot`).
+    private func slotX(_ k: Int, slots: Int = 5) -> CGFloat {
         let inset: CGFloat = 18
-        return (inset + (CGFloat(k) + 0.5) / CGFloat(slots) * (screenWidth - inset * 2)) / screenWidth
+        return (inset + (CGFloat(k - 1) + 0.5) / CGFloat(slots) * (screenWidth - inset * 2)) / screenWidth
     }
 
     private let bandY: CGFloat = 0.33
@@ -79,17 +79,28 @@ final class GestureTests: XCTestCase {
         for star in 1...5 { XCTAssertFalse(element("dock.star.\(star)").isSelected) }
     }
 
-    func testPullUpOntoTheClearSlotRemovesTheRating() throws {
-        element("dock.star.3").tap()           // rates and moves on
+    func testTappingTheRatedStarAgainClearsIt() throws {
+        element("dock.star.3").tap()
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
-        Thread.sleep(forTimeInterval: 0.8)     // let the auto-advance settle before paging back
+        Thread.sleep(forTimeInterval: 0.8)
         pager.swipeRight()
         let three = element("dock.star.3")
         let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: three)
         XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 4), .completed, "the rated photo comes back with 3 stars")
-        drag((0.5, 0.78), (slotX(0), bandY))
-        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+        three.tap()
         XCTAssertFalse(element("dock.star.3").isSelected, "rating cleared")
+    }
+
+    func testDiscardedPhotoShowsStatusInsteadOfStars() throws {
+        element("dock.discard").tap()           // discards and moves on
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+        Thread.sleep(forTimeInterval: 0.8)
+        pager.swipeRight()
+        XCTAssertTrue(element("dock.restore").waitForExistence(timeout: 4), "the stars give way to a discarded status")
+        XCTAssertFalse(element("dock.star.1").exists)
+        shot("10-discarded-dock")
+        element("dock.restore").tap()
+        XCTAssertTrue(element("dock.star.1").waitForExistence(timeout: 3), "restoring brings the stars back")
     }
 
     func testStarsRiseWhilePulling() throws {

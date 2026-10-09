@@ -10,9 +10,24 @@ import UIKit
 /// What a photo being pulled up / down looks like to the SwiftUI layer.
 /// Only the small HUD views observe it, so a drag never re-renders the rest of the screen.
 @MainActor
+final class DragPhaseModel: ObservableObject {
+    enum Phase { case idle, rating, trashing }
+    /// Changes only when a pull starts or ends, so the bars that fade away during a pull barely re-render.
+    @Published var phase: Phase = .idle
+}
+
+@MainActor
 final class RatingDragModel: ObservableObject {
     /// Points past the dead zone: > 0 pulled up (stars), < 0 pulled down (trash).
-    @Published var offset: CGFloat = 0
+    @Published var offset: CGFloat = 0 {
+        didSet {
+            let next: DragPhaseModel.Phase = offset > 0 ? .rating : (offset < 0 ? .trashing : .idle)
+            if phaseModel.phase != next { phaseModel.phase = next }
+        }
+    }
+    let phaseModel = DragPhaseModel()
+    /// Where the photo should land when it is dropped (the opening of the trash, in window coordinates).
+    var trashCenter: CGPoint?
     @Published var fingerX: CGFloat = 0.5
     @Published var fingerY: CGFloat = 0.5
     /// Set by the star HUD; used to turn the finger position into a star when the photo is released.
@@ -178,6 +193,7 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
             guard let cell else { return }
             self?.zoomChanged(cell: ObjectIdentifier(cell), zoomed: zoomed)
         }
+        cell.trashTarget = { [weak self] in self?.drag?.trashCenter }
         cell.onDrag = { [weak self] offset, x, y in self?.dragChanged(offset, x, y) }
         cell.onCommit = { [weak self] direction, x, y in self?.onCommit?(direction, x, y) }
         return cell
@@ -247,6 +263,7 @@ final class PhotoCell: UICollectionViewCell {
 
     var onSingleTap: (() -> Void)?
     var onZoomChange: ((Bool) -> Void)?
+    var trashTarget: (() -> CGPoint?)? { didSet { zoomView.trashTarget = trashTarget } }
     var onDrag: ((CGFloat, CGFloat, CGFloat) -> Void)?
     var onCommit: ((Int, CGFloat, CGFloat) -> Void)?
 

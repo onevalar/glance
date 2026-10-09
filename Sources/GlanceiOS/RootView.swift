@@ -68,7 +68,7 @@ struct ViewerScreen: View {
         let assetIDs: [String]
     }
 
-    @StateObject private var drag = RatingDragModel()
+    @State private var drag = RatingDragModel()   // not observed here: only the HUDs and `ChromeFade` follow it
     @State private var chromeVisible = true
     @State private var toast: LibraryStore.RatingEvent?
     @State private var sheet: Sheet?
@@ -89,14 +89,16 @@ struct ViewerScreen: View {
 
             VStack(spacing: 0) {
                 if chromeVisible {
-                    topBar
+                    ChromeFade(phase: drag.phaseModel) { topBar }
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 photoArea
                 if chromeVisible {
-                    VStack(spacing: 10) {
-                        toastView
-                        ratingDock
+                    ChromeFade(phase: drag.phaseModel) {
+                        VStack(spacing: 10) {
+                            toastView
+                            ratingDock
+                        }
                     }
                     .padding(.top, 8)
                     .padding(.bottom, 6)
@@ -104,7 +106,7 @@ struct ViewerScreen: View {
                 }
             }
 
-            StarRiseHUD(model: drag, count: starScale, current: currentMeta.rating)
+            StarRiseHUD(model: drag, count: starScale)
             TrashRiseHUD(model: drag)
 
             if !chromeVisible { toastView.frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 40) }
@@ -180,12 +182,12 @@ struct ViewerScreen: View {
     private func commit(_ direction: Int, _ x: CGFloat, _ y: CGFloat) {
         if direction < 0 {
             // The photo has just dropped into the trash: mark it.
-            store.discard(advance: autoAdvance)
+            store.discard(advance: autoAdvance && !currentMeta.isDiscarded)
             return
         }
         // Pulled up: only a star the finger is actually on counts; anywhere else cancels.
         guard let slot = RatingDragModel.slot(x: x, y: y, count: starScale, screenWidth: drag.screenWidth) else { return }
-        store.setRating(slot, advance: autoAdvance && slot > 0)
+        store.setRating(slot, advance: autoAdvance)
     }
 
     private func toggleChrome() {
@@ -338,37 +340,61 @@ struct ViewerScreen: View {
     // MARK: - Dock: the same actions as the gestures, always visible
 
     private var ratingDock: some View {
-        GlassGroup(spacing: 10) {
+        let discarded = currentMeta.isDiscarded
+        let rating = currentMeta.rating
+        return GlassGroup(spacing: 10) {
             HStack(spacing: 2) {
-                Button { store.discard(advance: autoAdvance) } label: {
-                    Image(systemName: currentMeta.isDiscarded ? "trash.fill" : "trash")
+                Button { store.discard(advance: autoAdvance && !discarded) } label: {
+                    Image(systemName: discarded ? "trash.fill" : "trash")
                         .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(currentMeta.isDiscarded ? Color.white : Color.primary)
+                        .foregroundStyle(discarded ? Color.white : Color.primary)
                         .frame(width: 46, height: 46)
-                        .background(currentMeta.isDiscarded ? Color.red : .clear, in: .circle)
+                        .background(discarded ? Color.red : .clear, in: .circle)
                         .contentShape(.circle)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.currentID == nil)
-                .accessibilityLabel("丢弃")
-                .accessibilityAddTraits(currentMeta.isDiscarded ? .isSelected : [])
+                .accessibilityLabel(discarded ? "恢复这张照片" : "丢弃")
+                .accessibilityAddTraits(discarded ? .isSelected : [])
                 .accessibilityIdentifier("dock.discard")
 
                 divider
 
-                ForEach(1...starScale, id: \.self) { index in
-                    Button { store.rate(stars: index, advance: autoAdvance) } label: {
-                        Image(systemName: index <= currentMeta.rating ? "star.fill" : "star")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(index <= currentMeta.rating ? Color.yellow : Color.primary)
-                            .frame(width: starScale == 5 ? 38 : 46, height: 46)
-                            .contentShape(.rect)
+                if discarded {
+                    // A discarded photo has no rating: the stars give way to a clear status.
+                    Button { store.discard(advance: false) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.uturn.backward")
+                            Text("已丢弃 · 点按恢复")
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.red)
+                        .frame(width: CGFloat(starScale) * (starScale == 5 ? 38 : 46), height: 38)
+                        .background(Color.red.opacity(0.16), in: .capsule)
+                        .contentShape(.capsule)
                     }
                     .buttonStyle(.plain)
-                    .disabled(store.currentID == nil)
-                    .accessibilityLabel("\(index) 星")
-                    .accessibilityAddTraits(index == currentMeta.rating ? .isSelected : [])
-                    .accessibilityIdentifier("dock.star.\(index)")
+                    .accessibilityLabel("已丢弃，点按恢复")
+                    .accessibilityIdentifier("dock.restore")
+                } else {
+                    ForEach(1...starScale, id: \.self) { index in
+                        let filled = index <= rating
+                        Button { store.rate(stars: index, advance: autoAdvance) } label: {
+                            Image(systemName: filled ? "star.fill" : "star")
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundStyle(filled ? AnyShapeStyle(LinearGradient(
+                                    colors: [Color(red: 1, green: 0.86, blue: 0.3), Color(red: 1, green: 0.62, blue: 0.1)],
+                                    startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(Color.primary.opacity(0.8)))
+                                .scaleEffect(index == rating ? 1.14 : 1)
+                                .frame(width: starScale == 5 ? 38 : 46, height: 46)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(store.currentID == nil)
+                        .accessibilityLabel("\(index) 星")
+                        .accessibilityAddTraits(index == rating ? .isSelected : [])
+                        .accessibilityIdentifier("dock.star.\(index)")
+                    }
                 }
 
                 divider
@@ -388,6 +414,8 @@ struct ViewerScreen: View {
             .foregroundStyle(.primary)
             .padding(5)
             .glassSurface(.capsule)
+            .animation(.spring(duration: 0.25, bounce: 0.3), value: rating)
+            .animation(.spring(duration: 0.25, bounce: 0.3), value: discarded)
         }
         .padding(.horizontal, 12)
     }
@@ -413,6 +441,20 @@ struct ViewerScreen: View {
         }
         .opacity(0)
         .accessibilityHidden(true)
+    }
+}
+
+/// Fades the bars away while a photo is being pulled up or down, so nothing competes with the gesture.
+struct ChromeFade<Content: View>: View {
+    @ObservedObject var phase: DragPhaseModel
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        let idle = phase.phase == .idle
+        content
+            .opacity(idle ? 1 : 0)
+            .allowsHitTesting(idle)
+            .animation(.easeOut(duration: 0.16), value: idle)
     }
 }
 

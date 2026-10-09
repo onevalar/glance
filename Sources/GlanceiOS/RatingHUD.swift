@@ -5,114 +5,122 @@
 
 import SwiftUI
 
-// MARK: - Trash can (drawn, with a lid that opens as the photo is pulled down)
+// MARK: - Trash bin (a wire-mesh bin like the classic Mac one; its opening glows red when the photo will be dropped)
 
-private struct TrashBodyShape: Shape {
+private struct BinBodyShape: Shape {
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height
         var path = Path()
-        path.move(to: CGPoint(x: w * 0.10, y: h * 0.28))
-        path.addLine(to: CGPoint(x: w * 0.90, y: h * 0.28))
-        path.addLine(to: CGPoint(x: w * 0.82, y: h * 0.90))
-        path.addQuadCurve(to: CGPoint(x: w * 0.74, y: h * 0.98), control: CGPoint(x: w * 0.81, y: h * 0.98))
-        path.addLine(to: CGPoint(x: w * 0.26, y: h * 0.98))
-        path.addQuadCurve(to: CGPoint(x: w * 0.18, y: h * 0.90), control: CGPoint(x: w * 0.19, y: h * 0.98))
+        path.move(to: CGPoint(x: 0, y: h * 0.14))
+        path.addLine(to: CGPoint(x: w, y: h * 0.14))
+        path.addLine(to: CGPoint(x: w * 0.91, y: h * 0.93))
+        path.addQuadCurve(to: CGPoint(x: w * 0.09, y: h * 0.93), control: CGPoint(x: w * 0.5, y: h * 1.04))
         path.closeSubpath()
         return path
     }
 }
 
-private struct TrashRibs: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        for fraction in [0.34, 0.50, 0.66] {
-            let x = rect.width * fraction
-            path.move(to: CGPoint(x: x, y: rect.height * 0.42))
-            path.addLine(to: CGPoint(x: x, y: rect.height * 0.82))
-        }
-        return path
-    }
-}
+struct TrashBin: View {
+    /// 0…1: how far the photo has been pulled; 1 = release now to drop it in.
+    var progress: CGFloat
+    var ready: Bool
 
-/// A trash can whose lid swings open: `lidOpen` 0 (closed) … 1 (wide open).
-struct TrashCanIcon: View {
-    var lidOpen: Double
-    var color: Color = .white
+    static let size = CGSize(width: 98, height: 114)
 
     var body: some View {
-        ZStack {
-            TrashBodyShape().fill(color.opacity(0.16))
-            TrashBodyShape().stroke(color, style: StrokeStyle(lineWidth: 3.2, lineJoin: .round))
-            TrashRibs().stroke(color.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+        let w = Self.size.width, h = Self.size.height
+        ZStack(alignment: .top) {
+            // Soft contact shadow on the "floor".
+            Ellipse().fill(Color.black.opacity(0.32)).frame(width: w * 0.9, height: 14).blur(radius: 5).offset(y: h - 8)
 
-            // Lid + handle, hinged on its left end.
-            GeometryReader { proxy in
-                let w = proxy.size.width, h = proxy.size.height
-                ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(color, style: StrokeStyle(lineWidth: 3.2))
-                        .frame(width: w * 0.30, height: h * 0.10)
-                        .offset(x: w * 0.35, y: -h * 0.07)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(color)
-                        .frame(width: w * 0.96, height: h * 0.10)
-                        .offset(x: w * 0.02, y: h * 0.18)
+            // Body: brushed metal with a wire mesh.
+            BinBodyShape()
+                .fill(LinearGradient(stops: [
+                    .init(color: Color(white: 0.58), location: 0),
+                    .init(color: Color(white: 0.90), location: 0.22),
+                    .init(color: Color(white: 0.68), location: 0.55),
+                    .init(color: Color(white: 0.84), location: 0.80),
+                    .init(color: Color(white: 0.52), location: 1)], startPoint: .leading, endPoint: .trailing))
+                .overlay {
+                    Canvas { context, size in
+                        context.clip(to: BinBodyShape().path(in: CGRect(origin: .zero, size: size)))
+                        var mesh = Path()
+                        let step: CGFloat = 12
+                        var x = -size.height
+                        while x < size.width + size.height {
+                            mesh.move(to: CGPoint(x: x, y: size.height * 0.14))
+                            mesh.addLine(to: CGPoint(x: x + size.height * 0.8, y: size.height))
+                            mesh.move(to: CGPoint(x: x + size.height * 0.8, y: size.height * 0.14))
+                            mesh.addLine(to: CGPoint(x: x, y: size.height))
+                            x += step
+                        }
+                        context.stroke(mesh, with: .color(Color.black.opacity(0.28)), lineWidth: 1)
+                    }
                 }
-                .frame(width: w, height: h, alignment: .topLeading)
-                .rotationEffect(.degrees(-46 * lidOpen), anchor: UnitPoint(x: 0.02, y: 0.28))
+                .overlay(BinBodyShape().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                .frame(width: w, height: h)
+
+            // Opening: dark inside, rim on top; red glow when ready.
+            ZStack {
+                Ellipse().fill(LinearGradient(colors: [Color(white: 0.06), Color(white: 0.30)],
+                                              startPoint: .top, endPoint: .bottom))
+                Ellipse().fill(Color.red.opacity(ready ? 0.62 : 0.0))
+                Ellipse().stroke(LinearGradient(colors: [Color(white: 0.97), Color(white: 0.55)],
+                                                startPoint: .top, endPoint: .bottom), lineWidth: 3.5)
             }
+            .frame(width: w, height: h * 0.26)
+            .offset(y: h * 0.01)
         }
-        .frame(width: 58, height: 66)
-        .animation(.spring(duration: 0.25, bounce: 0.35), value: lidOpen)
+        .frame(width: w, height: h)
+        .shadow(color: ready ? Color.red.opacity(0.55) : .clear, radius: 20)
+        .rotationEffect(.degrees(ready ? -4 : 0), anchor: .bottom)
+        .scaleEffect(ready ? 1.12 : 0.9 + 0.1 * progress, anchor: .bottom)
+        .animation(.spring(duration: 0.28, bounce: 0.45), value: ready)
     }
 }
 
-/// The trash that rises from the bottom edge as the photo is pulled down.
+/// The only thing on screen besides the photo while it is pulled down: the bin rises from the bottom edge.
 struct TrashRiseHUD: View {
     @ObservedObject var model: RatingDragModel
 
     private var progress: CGFloat { min(max(-model.offset / 104, 0), 1) }
     private var ready: Bool { progress >= 1 }
+    private static let bottomGap: CGFloat = 16
 
     var body: some View {
-        VStack {
-            Spacer()
-            VStack(spacing: 10) {
-                TrashCanIcon(lidOpen: ready ? 1 : Double(progress) * 0.55,
-                             color: ready ? .white : .primary)
-                    .frame(width: 112, height: 112)
-                    .glassSurface(.circle, tint: ready ? Color.red.opacity(0.85) : nil)
-                    .scaleEffect(ready ? 1.14 : 0.8 + 0.2 * progress)
-                    .shadow(color: (ready ? Color.red : Color.black).opacity(0.25 * progress), radius: 18, y: 8)
-                Text(ready ? "松手丢弃" : "继续下拉")
-                    .font(.system(size: 14, weight: .semibold))
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                    .glassSurface(.capsule, tint: ready ? Color.red.opacity(0.7) : nil)
-                    .foregroundStyle(ready ? Color.white : Color.primary)
-            }
-            .offset(y: (1 - progress) * 230)
-            .opacity(Double(min(1, progress * 2.4)))
-            .padding(.bottom, 56)
+        GeometryReader { proxy in
+            let binHeight = TrashBin.size.height
+            let restingTop = proxy.size.height - proxy.safeAreaInsets.bottom - Self.bottomGap - binHeight
+            TrashBin(progress: progress, ready: ready)
+                .position(x: proxy.size.width / 2, y: restingTop + binHeight / 2 + (1 - progress) * 150)
+                .opacity(Double(min(1, progress * 2.5)))
+                .onAppear { report(proxy, restingTop) }
+                .onChange(of: proxy.size) { _, _ in report(proxy, restingTop) }
         }
+        .ignoresSafeArea()
         .opacity(model.offset < 0 ? 1 : 0)
-        .animation(.spring(duration: 0.28, bounce: 0.3), value: ready)
         .sensoryFeedback(.impact(weight: .medium), trigger: ready)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// The photo flies to the opening of the bin.
+    private func report(_ proxy: GeometryProxy, _ restingTop: CGFloat) {
+        let frame = proxy.frame(in: .global)
+        model.trashCenter = CGPoint(x: frame.midX, y: frame.minY + restingTop + TrashBin.size.height * 0.14)
     }
 }
 
 // MARK: - Stars (a row that rises as the photo is pulled up; only the star the finger is actually on is chosen)
 
 extension RatingDragModel {
-    /// Slot 0 is "clear the rating", 1…count are the stars. nil = the finger is not on the row, so releasing cancels.
+    /// 1…count are the stars. nil = the finger is not on the row, so releasing cancels.
     static func slot(x: CGFloat, y: CGFloat, count: Int, screenWidth: CGFloat) -> Int? {
         guard abs(y - bandCenter) <= bandHalfHeight, screenWidth > 0 else { return nil }
         let inset = StarRiseHUD.sideInset
         let usable = max(screenWidth - inset * 2, 1)
-        let slots = count + 1
         let relative = (x * screenWidth - inset) / usable
-        return min(max(Int(relative * CGFloat(slots)), 0), slots - 1)
+        return min(max(Int(relative * CGFloat(count)), 0), count - 1) + 1
     }
 }
 
@@ -122,8 +130,6 @@ struct StarRiseHUD: View {
 
     @ObservedObject var model: RatingDragModel
     var count: Int
-    /// The photo's current rating, shown so a re-rate is not a surprise.
-    var current: Int
 
     private var progress: CGFloat { min(max(model.offset / 60, 0), 1) }
 
@@ -131,40 +137,25 @@ struct StarRiseHUD: View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let slot = RatingDragModel.slot(x: model.fingerX, y: model.fingerY, count: count, screenWidth: width)
-            let lit = max(slot ?? 0, 0)
-            VStack(spacing: 12) {
-                HStack(spacing: 0) {
-                    // Slot 0: clear the rating.
-                    Image(systemName: "xmark")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(slot == 0 ? Color.red : Color.primary.opacity(0.5))
-                        .scaleEffect(slot == 0 ? 1.25 : 1)
+            let lit = slot ?? 0
+            HStack(spacing: 0) {
+                ForEach(1...count, id: \.self) { index in
+                    let on = index <= lit
+                    Image(systemName: on ? "star.fill" : "star")
+                        .font(.system(size: 36, weight: .semibold))
+                        .foregroundStyle(on ? AnyShapeStyle(LinearGradient(
+                            colors: [Color(red: 1, green: 0.86, blue: 0.3), Color(red: 1, green: 0.62, blue: 0.1)],
+                            startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(Color.primary.opacity(0.5)))
+                        .scaleEffect(index == slot ? 1.36 : (on ? 1.06 : 0.94))
+                        .offset(y: index == slot ? -6 : 0)
+                        .shadow(color: on ? Color.orange.opacity(0.45) : .clear, radius: index == slot ? 12 : 3)
                         .frame(maxWidth: .infinity)
-                    ForEach(1...count, id: \.self) { index in
-                        let on = index <= lit
-                        Image(systemName: on ? "star.fill" : "star")
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(on ? AnyShapeStyle(LinearGradient(
-                                colors: [Color(red: 1, green: 0.86, blue: 0.3), Color(red: 1, green: 0.62, blue: 0.1)],
-                                startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(Color.primary.opacity(0.45)))
-                            .scaleEffect(index == slot ? 1.34 : (on ? 1.05 : 0.95))
-                            .offset(y: index == slot ? -6 : 0)
-                            .shadow(color: on ? Color.orange.opacity(0.45) : .clear, radius: index == slot ? 12 : 3)
-                            .frame(maxWidth: .infinity)
-                    }
                 }
-                .padding(.vertical, 16)
-                .padding(.horizontal, 0)
-                .frame(height: 78)
-                .glassSurface(.capsule)
-                .padding(.horizontal, Self.sideInset)
-
-                Text(hint(for: slot))
-                    .font(.system(size: 15, weight: .semibold))
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                    .glassSurface(.capsule)
-                    .foregroundStyle(slot == nil ? Color.secondary : Color.primary)
             }
+            .frame(height: 82)
+            .glassSurface(.capsule)
+            .padding(.horizontal, Self.sideInset)
+            .opacity(slot == nil ? 0.78 : 1)
             .animation(.spring(duration: 0.2, bounce: 0.45), value: slot)
             .frame(width: width)
             .position(x: width / 2, y: proxy.size.height * RatingDragModel.bandCenter)
@@ -178,13 +169,5 @@ struct StarRiseHUD: View {
                                                                       screenWidth: model.screenWidth))
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-
-    private func hint(for slot: Int?) -> String {
-        switch slot {
-        case nil: return "滑到星星上再松手；离开星星松手＝取消"
-        case 0: return "松手清除评分"
-        case let n?: return "松手评 \(n) 星"
-        }
     }
 }
