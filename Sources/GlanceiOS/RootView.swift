@@ -71,7 +71,6 @@ struct ViewerScreen: View {
     @State private var chromeVisible = true
     @State private var dragOffset: CGFloat = 0
     @State private var dragX: CGFloat = 0.5
-    @State private var fallToken = 0
     @State private var toast: LibraryStore.RatingEvent?
     @State private var gridMode: GridMode?
     @State private var compareRequest: CompareRequest?
@@ -96,8 +95,7 @@ struct ViewerScreen: View {
                 ViewerPager(
                     onSingleTap: { toggleChrome() },
                     onVerticalDrag: { offset, x in dragOffset = offset; dragX = x },
-                    onVerticalCommit: { direction, x in commit(direction, x) },
-                    discardFallToken: fallToken
+                    onVerticalCommit: { direction, x in commit(direction, x) }
                 )
                 .ignoresSafeArea()
             }
@@ -113,7 +111,8 @@ struct ViewerScreen: View {
                 ratingDock
             }
             .padding(.bottom, 6)
-            .opacity(chromeVisible || store.visible.isEmpty ? 1 : 0)
+            .opacity((chromeVisible || store.visible.isEmpty ? 1 : 0) * Double(1 - min(1, abs(dragOffset) / 50)))
+            .animation(.easeOut(duration: 0.15), value: dragOffset == 0)
             .allowsHitTesting(chromeVisible || store.visible.isEmpty)
 
             if showGuide {
@@ -162,12 +161,8 @@ struct ViewerScreen: View {
         if direction > 0 {
             store.rate(stars: starsFor(x: x), advance: autoAdvance)
         } else {
-            // Let the photo drop into the trash first, then mark it.
-            fallToken += 1
-            Task {
-                try? await Task.sleep(nanoseconds: 230_000_000)
-                store.discard(advance: autoAdvance)
-            }
+            // The photo has just dropped into the trash (animated in the photo view): mark it now.
+            store.discard(advance: autoAdvance)
         }
     }
 
@@ -343,63 +338,12 @@ struct ViewerScreen: View {
         .allowsHitTesting(false)
     }
 
-    /// Stars that rise while a photo is pulled up; the one under the finger sets the rating.
     private var starHUD: some View {
-        let progress = min(max(dragOffset / 70, 0), 1)
-        let selected = starsFor(x: dragX)
-        return VStack(spacing: 14) {
-            HStack(spacing: 0) {
-                ForEach(1...starScale, id: \.self) { index in
-                    Image(systemName: index <= selected ? "star.fill" : "star")
-                        .font(.system(size: 38, weight: .semibold))
-                        .foregroundStyle(index <= selected ? Color.yellow : Color.white.opacity(0.85))
-                        .scaleEffect(index == selected ? 1.3 : 1)
-                        .frame(maxWidth: .infinity)
-                        .shadow(color: .black.opacity(0.35), radius: 4)
-                        .animation(.spring(duration: 0.18), value: selected)
-                }
-            }
-            .padding(.horizontal, 8)
-            Text("松手评 \(selected) 星")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14).padding(.vertical, 7)
-                .background(.black.opacity(0.55), in: .capsule)
-        }
-        .offset(y: (1 - progress) * 60 - 90)
-        .opacity(Double(progress))
-        .sensoryFeedback(.selection, trigger: selected)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        StarRiseHUD(progress: min(max(dragOffset / 90, 0), 1), count: starScale, selected: starsFor(x: dragX))
     }
 
-    /// A trash can that rises as the photo is pulled down; past the threshold it opens ("松手丢弃").
     private var trashHUD: some View {
-        let progress = min(max(-dragOffset / 70, 0), 1)
-        let ready = progress >= 1
-        return VStack {
-            Spacer()
-            VStack(spacing: 8) {
-                Image(systemName: ready ? "trash.fill" : "trash")
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 74, height: 74)
-                    .background(ready ? Color.red : Color.black.opacity(0.55), in: .circle)
-                    .scaleEffect(0.7 + 0.3 * progress + (ready ? 0.18 : 0))
-                    .animation(.spring(duration: 0.2), value: ready)
-                Text(ready ? "松手丢弃" : "继续下拉")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12).padding(.vertical, 5)
-                    .background(.black.opacity(0.55), in: .capsule)
-            }
-            .offset(y: (1 - progress) * 140)
-            .opacity(Double(progress))
-            .padding(.bottom, 110)
-        }
-        .sensoryFeedback(.impact(weight: .medium), trigger: ready)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        TrashRiseHUD(progress: min(max(-dragOffset / 90, 0), 1))
     }
 
     @ViewBuilder

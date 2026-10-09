@@ -13,7 +13,6 @@ struct PhotoPage: View {
     var syncHub: CompareSyncHub?
     var onZoomChange: (Bool) -> Void = { _ in }
     var onSingleTap: () -> Void = {}
-    var discardFallToken = 0
     var onVerticalDrag: (CGFloat, CGFloat) -> Void = { _, _ in }
     var onVerticalCommit: (Int, CGFloat) -> Void = { _, _ in }
 
@@ -35,8 +34,7 @@ struct PhotoPage: View {
                         onSingleTap: onSingleTap,
                         onZoomedIn: { Task { await loadOriginal() } },
                         onVerticalDrag: onVerticalDrag,
-                        onVerticalCommit: onVerticalCommit,
-                        discardFallToken: discardFallToken
+                        onVerticalCommit: onVerticalCommit
                     )
                 } else {
                     ProgressView()
@@ -67,14 +65,15 @@ struct PhotoPage: View {
 struct ViewerPager: View {
     @EnvironmentObject private var store: LibraryStore
     @State private var isZoomed = false
+    /// True while a photo is being pulled up / down: the finger also moves sideways to choose a star,
+    /// and that must not turn the page.
+    @State private var isRatingDrag = false
 
     var onSingleTap: () -> Void
     /// Vertical drag of the current photo: offset (> 0 up, < 0 down) and finger x across the screen (0…1).
     var onVerticalDrag: (CGFloat, CGFloat) -> Void
     /// Released past the threshold: +1 = up (stars), -1 = down (trash).
     var onVerticalCommit: (Int, CGFloat) -> Void
-    /// Bumped when the current photo should play the discard animation.
-    var discardFallToken = 0
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -86,9 +85,10 @@ struct ViewerPager: View {
                             if asset.localIdentifier == store.currentID { isZoomed = zoomed }
                         },
                         onSingleTap: onSingleTap,
-                        discardFallToken: asset.localIdentifier == store.currentID ? discardFallToken : 0,
                         onVerticalDrag: { offset, x in
-                            if asset.localIdentifier == store.currentID { onVerticalDrag(offset, x) }
+                            guard asset.localIdentifier == store.currentID else { return }
+                            isRatingDrag = offset != 0
+                            onVerticalDrag(offset, x)
                         },
                         onVerticalCommit: { direction, x in
                             if asset.localIdentifier == store.currentID { onVerticalCommit(direction, x) }
@@ -104,7 +104,7 @@ struct ViewerPager: View {
         .scrollPosition(id: $store.currentID)
         .scrollIndicators(.hidden)
         // While zoomed in, dragging pans the photo instead of turning the page.
-        .scrollDisabled(isZoomed)
+        .scrollDisabled(isZoomed || isRatingDrag)
         .onChange(of: store.currentID) { _, _ in isZoomed = false }
         .accessibilityIdentifier("viewer.pager")
     }

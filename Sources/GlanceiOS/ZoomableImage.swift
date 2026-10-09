@@ -29,12 +29,28 @@ final class CompareSyncHub {
     }
 }
 
+/// A pan that only starts for vertical movement, so horizontal swipes still turn the page.
+final class VerticalPanGestureRecognizer: UIPanGestureRecognizer {
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        if state == .possible {
+            let t = translation(in: view)
+            if abs(t.x) > 8 || abs(t.y) > 8 {
+                // Decide once: only a clearly sideways start belongs to the pager. A diagonal start is
+                // still a rating drag (the finger moves sideways to choose a star); the pager is locked then.
+                if abs(t.x) > abs(t.y) * 1.6 { state = .failed; return }
+            }
+        }
+        super.touchesMoved(touches, with: event)
+    }
+}
+
 /// Pinch to zoom, drag to pan, double-tap to toggle zoom. Built on `UIScrollView`,
 /// which gives the native feel (inertia, rubber-banding) that a SwiftUI gesture can't match.
 ///
-/// While the photo is fitted (not zoomed), dragging it up or down is a rating gesture:
-/// the photo follows the finger with a rubber band and a release past the threshold commits.
-final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
+/// While the photo is fitted (not zoomed), dragging it up or down is the rating gesture. The photo is moved by
+/// hand (not by scroll-view bounce): pulled down it shrinks into a rounded card that can be dropped in the
+/// trash; pulled up it recedes while the stars appear. Releasing past the threshold commits.
+final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     let imageView = UIImageView()
     var pixelSize: CGSize = .zero { didSet { if oldValue != pixelSize { needsFit = true } } }
     var onZoomChange: ((Bool) -> Void)?
@@ -50,7 +66,8 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     var syncHub: CompareSyncHub? { didSet { syncHub?.register(self, id: syncID) } }
     var syncID = ""
 
-    private static let commitDistance: CGFloat = 70
+    private static let commitDistance: CGFloat = 96
+    private let ratingPan = VerticalPanGestureRecognizer()
 
     private var needsFit = true
     private var lastBoundsSize: CGSize = .zero
@@ -67,10 +84,14 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         contentInsetAdjustmentBehavior = .never
         bouncesZoom = true
         decelerationRate = .fast
-        // Vertical rubber band is the rating gesture; horizontal drags fall through to the pager.
-        alwaysBounceVertical = true
+        alwaysBounceVertical = false
         alwaysBounceHorizontal = false
         isDirectionalLockEnabled = true
+
+        ratingPan.addTarget(self, action: #selector(handleRatingPan(_:)))
+        ratingPan.maximumNumberOfTouches = 1
+        ratingPan.delegate = self
+        addGestureRecognizer(ratingPan)
 
         imageView.contentMode = .scaleAspectFit
         addSubview(imageView)
@@ -140,46 +161,145 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        if ratingGesturesEnabled, isFitted, isDragging || isDecelerating {
-            onVerticalDrag?(contentOffset.y, fingerFraction())
-        }
         broadcastTransform()
     }
 
-    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
-                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-        guard ratingGesturesEnabled, isFitted else { return }
-        let offset = contentOffset.y
-        let fraction = fingerFraction()
-        let flickedUp = velocity.y > 0.9 && offset > 20
-        let flickedDown = velocity.y < -0.9 && offset < -20
-        if offset > Self.commitDistance || flickedUp {
-            onVerticalCommit?(1, fraction)
-        } else if offset < -Self.commitDistance || flickedDown {
-            onVerticalCommit?(-1, fraction)
-        }
-        onVerticalDrag?(0, fraction)
+    // MARK: - Rating drag (up = stars, down = trash)
+
+    /// Never make the page-turning scroll view of the pager wait for (or be blocked by) the vertical rating pan.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        gestureRecognizer === ratingPan
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        false
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === ratingPan else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
+        return ratingGesturesEnabled && isFitted
     }
 
     /// Horizontal finger position across the window, 0…1.
-    private func fingerFraction() -> CGFloat {
+    private func fingerFraction(_ gesture: UIGestureRecognizer) -> CGFloat {
         let width = window?.bounds.width ?? bounds.width
         guard width > 0 else { return 0.5 }
-        return (panGestureRecognizer.location(in: nil).x / width).clamped(to: 0...1)
+        return (gesture.location(in: nil).x / width).clamped(to: 0...1)
     }
 
-    /// The photo drops away (into the trash that rises from the bottom) before it is replaced.
-    func playDiscardFall() {
-        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseIn]) {
-            self.transform = CGAffineTransform(translationX: 0, y: self.bounds.height * 0.32).scaledBy(x: 0.22, y: 0.22)
-            self.alpha = 0
-        } completion: { _ in
-            // Ready again in case the same page stays on screen.
-            UIView.performWithoutAnimation {
-                self.transform = .identity
-                self.alpha = 1
+    @objc private func handleRatingPan(_ gesture: UIPanGestureRecognizer) {
+        let translation = gesture.translation(in: self)
+        let x = fingerFraction(gesture)
+        switch gesture.state {
+        case .began, .changed:
+            layer.removeAnimation(forKey: "dragTransform")
+            imageView.layer.removeAnimation(forKey: "dragCorner")
+            applyDragVisuals(pull: translation.y)
+            onVerticalDrag?(-translation.y, x)
+        case .ended, .cancelled, .failed:
+            let velocity = gesture.velocity(in: self).y
+            let down = translation.y
+            let up = -translation.y
+            var direction = 0
+            if gesture.state == .ended {
+                if down > Self.commitDistance || (velocity > 900 && down > 30) { direction = -1 }
+                else if up > Self.commitDistance || (velocity < -900 && up > 30) { direction = 1 }
+            }
+            onVerticalDrag?(0, x)
+            switch direction {
+            case -1:
+                dropIntoTrash { [weak self] in self?.onVerticalCommit?(-1, x) }
+            case 1:
+                springBack()
+                onVerticalCommit?(1, x)
+            default:
+                springBack()
+            }
+        default:
+            break
+        }
+    }
+
+    /// `pull` > 0 drags the photo down (it shrinks into a rounded card), < 0 drags it up (it recedes a little).
+    private func applyDragVisuals(pull: CGFloat) {
+        let progress = min(abs(pull) / Self.commitDistance, 1)
+        let scale: CGFloat
+        let translationY: CGFloat
+        if pull >= 0 {
+            scale = 1 - 0.40 * progress
+            translationY = pull * 0.92
+        } else {
+            scale = 1 - 0.06 * progress
+            translationY = pull * 0.55
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.sublayerTransform = CATransform3DScale(CATransform3DMakeTranslation(0, translationY, 0), scale, scale, 1)
+        imageView.layer.cornerRadius = pull > 0 ? 24 * progress : 0
+        imageView.layer.masksToBounds = pull > 0
+        CATransaction.commit()
+    }
+
+    private func springBack() {
+        let from = layer.presentation()?.sublayerTransform ?? layer.sublayerTransform
+        let spring = CASpringAnimation(keyPath: "sublayerTransform")
+        spring.fromValue = from
+        spring.toValue = CATransform3DIdentity
+        spring.damping = 15
+        spring.stiffness = 260
+        spring.mass = 1
+        spring.initialVelocity = 0
+        spring.duration = spring.settlingDuration
+        layer.sublayerTransform = CATransform3DIdentity
+        layer.add(spring, forKey: "dragTransform")
+
+        let corner = CABasicAnimation(keyPath: "cornerRadius")
+        corner.fromValue = imageView.layer.presentation()?.cornerRadius ?? imageView.layer.cornerRadius
+        corner.toValue = 0
+        corner.duration = 0.25
+        imageView.layer.cornerRadius = 0
+        imageView.layer.add(corner, forKey: "dragCorner")
+    }
+
+    /// The photo, already a small card, drops toward the trash that has risen at the bottom and disappears.
+    private func dropIntoTrash(completion: @escaping () -> Void) {
+        let from = layer.presentation()?.sublayerTransform ?? layer.sublayerTransform
+        var target = CATransform3DMakeTranslation(0, bounds.height * 0.40, 0)
+        target = CATransform3DRotate(target, 0.18, 0, 0, 1)
+        target = CATransform3DScale(target, 0.10, 0.10, 1)
+
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            completion()
+            // Show the photo again (it may stay on screen with its "discarded" badge) after a beat.
+            self?.imageView.alpha = 0
+            self?.layer.removeAnimation(forKey: "dragTransform")
+            self?.layer.sublayerTransform = CATransform3DIdentity
+            self?.imageView.layer.cornerRadius = 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                UIView.animate(withDuration: 0.25) { self?.imageView.alpha = 1 }
             }
         }
+        let move = CABasicAnimation(keyPath: "sublayerTransform")
+        move.fromValue = from
+        move.toValue = target
+        move.duration = 0.26
+        move.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        layer.sublayerTransform = target
+        layer.add(move, forKey: "dragTransform")
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = 0.26
+        fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        imageView.layer.opacity = 0
+        imageView.layer.add(fade, forKey: "dropFade")
+        CATransaction.commit()
+        // Layer opacity is restored through `alpha` above; keep the model value in step.
+        imageView.layer.opacity = 1
     }
 
     // MARK: - Comparison sync
@@ -252,11 +372,6 @@ struct ZoomableImage: UIViewRepresentable {
     var onZoomedIn: () -> Void
     var onVerticalDrag: (CGFloat, CGFloat) -> Void = { _, _ in }
     var onVerticalCommit: (Int, CGFloat) -> Void = { _, _ in }
-    /// Bumped to run the discard "fall" animation on this photo.
-    var discardFallToken = 0
-
-    final class Coordinator { var lastFallToken = 0 }
-    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> ZoomingScrollView {
         let view = ZoomingScrollView()
@@ -271,10 +386,7 @@ struct ZoomableImage: UIViewRepresentable {
         view.onZoomedIn = onZoomedIn
         view.onVerticalDrag = onVerticalDrag
         view.onVerticalCommit = onVerticalCommit
-        if context.coordinator.lastFallToken != discardFallToken {
-            context.coordinator.lastFallToken = discardFallToken
-            if discardFallToken > 0 { view.playDiscardFall() }
-        }
+
         view.ratingGesturesEnabled = ratingGesturesEnabled
         view.pixelSize = pixelSize
         if view.imageView.image !== image {

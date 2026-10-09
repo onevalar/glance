@@ -94,11 +94,23 @@ final class GestureTests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.5)
     }
 
+    /// Part-way down: the lid is only partly open and the photo is still large.
+    func testTrashHalfway() throws {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.46))
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.4) { self.shot("08-trash-half") }
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.0)
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+
     func testDockStarsAndDiscardRate() throws {
         shot("10-dock")
         element("dock.star.3").tap()
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), "dock rating shows the undo toast")
+        shot("13-after-dock-rate")
         pager.swipeRight()
+        sleep(1)
+        shot("13-after-swipe-back")
         XCTAssertTrue(element("badge.stars.3").waitForExistence(timeout: 3), "three stars badge")
     }
 
@@ -170,5 +182,18 @@ final class GestureTests: XCTestCase {
         for _ in 0..<5 { pager.swipeLeft() }
         sleep(2)
         shot("11-over-photo-\(ProcessInfo.processInfo.environment["GLANCE_UITEST_TAG"] ?? "x")")
+    }
+
+    func testHorizontalPaging() throws {
+        let start = element("top.counter").label
+        pager.swipeLeft()
+        sleep(1)
+        let afterLeft = element("top.counter").label
+        pager.swipeRight()
+        sleep(1)
+        let afterRight = element("top.counter").label
+        NSLog("PAGINGDEBUG start=\(start) left=\(afterLeft) right=\(afterRight)")
+        XCTAssertNotEqual(start, afterLeft, "swipe left goes to the next photo")
+        XCTAssertEqual(start, afterRight, "swipe right comes back")
     }
 }
