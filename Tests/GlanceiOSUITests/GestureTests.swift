@@ -199,19 +199,63 @@ final class GestureTests: XCTestCase {
         XCTAssertFalse(element("dock.discard").isSelected, "undo takes the photo out of the discard pile")
     }
 
-    func testPullDownMarksDiscardedNotDeleted() throws {
-        drag((0.5, 0.35), (0.5, 0.82))
-        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+    private var pileCells: XCUIElementQuery {
+        app.otherElements.matching(NSPredicate(format: "label BEGINSWITH '照片'"))
+    }
+
+    func testDiscardPileFromThrowToEmpty() throws {
+        drag((0.5, 0.35), (0.5, 0.82))          // discard one photo
+        XCTAssertTrue(element("toast.pile").waitForExistence(timeout: 3), "the toast leads to the pile")
         Thread.sleep(forTimeInterval: 1.2)      // the bars return once the bin has sunk
+        shot("16b-toast")
+        element("toast.pile").tap()
+        XCTAssertTrue(element("pile.summary").waitForExistence(timeout: 3), "all discarded photos at a glance")
+        XCTAssertEqual(pileCells.count, 1)
+        shot("17-pile")
+
+        pileCells.element(boundBy: 0).tap()     // look at it large
+        XCTAssertTrue(element("dock.restore").waitForExistence(timeout: 3), "one photo of the pile, large")
+        XCTAssertTrue(element("dock.delete").exists)
+        XCTAssertTrue(position.hasSuffix("1"), "the viewer now walks through the pile")
+        shot("18-pile-photo")
+        drag((0.5, 0.35), (0.5, 0.82))          // pulling down does nothing in the pile
+        XCTAssertFalse(element("toast.undo").waitForExistence(timeout: 2), "no second discard inside the pile")
+        XCTAssertTrue(element("dock.restore").exists)
+
+        element("dock.pile").tap()              // back to the overview
+        XCTAssertTrue(element("pile.summary").waitForExistence(timeout: 3))
+        element("pile.restore").tap()           // 全部恢复
+        XCTAssertTrue(app.staticTexts["丢弃篮是空的"].waitForExistence(timeout: 3), "restoring empties the pile")
+        shot("19-pile-empty")
+        element("pile.close").tap()
+        XCTAssertTrue(element("dock.star.1").waitForExistence(timeout: 3), "back to rating once the pile is empty")
+    }
+
+    func testDiscardPileSelectSome() throws {
+        element("dock.discard").tap()           // discard two photos (each moves on)
+        Thread.sleep(forTimeInterval: 0.6)
+        element("dock.discard").tap()
+        Thread.sleep(forTimeInterval: 0.6)
         element("top.scope").tap()
-        element("filter.discarded").tap()
-        XCTAssertTrue(element("dock.restore").waitForExistence(timeout: 3), "the pile offers 恢复")
-        XCTAssertTrue(element("dock.empty").exists, "and a separate 清空")
-        XCTAssertFalse(element("dock.star.1").exists, "no rating inside the pile")
-        shot("09-discard-pile")
-        element("dock.empty").tap()
-        XCTAssertTrue(app.buttons["删除这 1 张照片"].waitForExistence(timeout: 3), "emptying asks first")
-        shot("09b-empty-confirm")
+        element("menu.pile").tap()
+        XCTAssertTrue(element("pile.summary").waitForExistence(timeout: 3))
+        XCTAssertEqual(pileCells.count, 2)
+        element("pile.select").tap()
+        pileCells.element(boundBy: 0).tap()
+        XCTAssertEqual(element("pile.restore").label, "恢复 1 张")
+        shot("17b-pile-select")
+        element("pile.restore").tap()
+        let one = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == 1"), object: pileCells)
+        XCTAssertEqual(XCTWaiter().wait(for: [one], timeout: 4), .completed, "only the chosen photo came back")
+
+        element("pile.delete").tap()            // 全部删除: the system asks first
+        Thread.sleep(forTimeInterval: 2)
+        shot("17c-pile-delete-confirm")
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let alert = springboard.alerts.firstMatch.waitForExistence(timeout: 4) ? springboard.alerts.firstMatch : app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 2), "deleting is confirmed by the system")
+        shot("17c-pile-delete-confirm")
+        alert.buttons.element(boundBy: 0).tap() // decline: nothing is deleted
     }
 
     func testTrashRisesWhilePulling() throws {

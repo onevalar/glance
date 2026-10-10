@@ -62,7 +62,7 @@ struct ViewerScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Sheet: String, Identifiable {
-        case photos, comparePicker
+        case photos, comparePicker, pile
         var id: String { rawValue }
     }
 
@@ -80,7 +80,7 @@ struct ViewerScreen: View {
     @State private var toast: LibraryStore.RatingEvent?
     @State private var sheet: Sheet?
     @State private var compareRequest: CompareRequest?
-    @State private var confirmCleanup = false
+    @State private var notice: String?
     @AppStorage("autoAdvance") private var autoAdvance = true
     @AppStorage("starScale") private var starScale = 5
     @AppStorage("didShowGestureGuide") private var didShowGuide = false
@@ -135,23 +135,21 @@ struct ViewerScreen: View {
                 PhotoGridView()
             case .comparePicker:
                 ComparePickerView { ids in compareRequest = CompareRequest(assetIDs: ids) }
+            case .pile:
+                DiscardPileView { asset in store.openInPile(asset) }
             }
         }
         .fullScreenCover(item: $compareRequest) { request in
             CompareView(assetIDs: request.assetIDs)
         }
-        .confirmationDialog(
-            "把 \(store.count(.discarded)) 张已丢弃的照片移到“最近删除”？",
-            isPresented: $confirmCleanup,
-            titleVisibility: .visible
-        ) {
-            Button("删除这 \(store.count(.discarded)) 张照片", role: .destructive) {
-                Task { await store.delete(store.discardedAssets) }
-            }
-        } message: {
-            Text("照片会进入相册的“最近删除”，30 天内还可以恢复。系统还会再确认一次。")
-        }
         .onChange(of: store.lastRating) { _, event in showToast(event) }
+        // The last photo of the pile was restored or deleted: back to all photos.
+        .onChange(of: store.visible.isEmpty) { _, empty in
+            if empty, inDiscardPile {
+                store.filter = .all
+                show(notice: "丢弃篮已清空")
+            }
+        }
         .onChange(of: starScale) { _, scale in
             if case .stars(let n) = store.filter, n > scale { store.filter = .all }
         }
@@ -184,7 +182,8 @@ struct ViewerScreen: View {
                         // Like Photos: zooming in clears the screen for the picture.
                         if zoomed, chromeVisible { chromeVisible = false }
                     },
-                    onCommit: { outcome in commit(outcome) }
+                    onCommit: { outcome in commit(outcome) },
+                    discardEnabled: !inDiscardPile
                 )
                 .ignoresSafeArea()
             }
@@ -267,10 +266,19 @@ struct ViewerScreen: View {
                     .accessibilityIdentifier("scope.grid")
             }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "photo.on.rectangle").font(.system(size: 15, weight: .medium))
-                Text(store.selectedAlbum?.title ?? "全部照片").lineLimit(1).frame(maxWidth: 84)
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).opacity(0.7)
+            // Gives way to the position pill when space is short (it then shows only the icon).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    Image(systemName: "photo.on.rectangle").font(.system(size: 15, weight: .medium))
+                    Text(store.selectedAlbum?.title ?? "全部照片").lineLimit(1).frame(maxWidth: 84)
+                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).opacity(0.7)
+                }
+                .fixedSize()
+                HStack(spacing: 4) {
+                    Image(systemName: "photo.on.rectangle").font(.system(size: 15, weight: .medium))
+                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).opacity(0.7)
+                }
+                .fixedSize()
             }
             .font(.system(size: 15, weight: .medium))
             .padding(.horizontal, 14)
@@ -288,7 +296,7 @@ struct ViewerScreen: View {
     private var positionMenu: some View {
         Menu {
             Section("按评分筛选") {
-                ForEach(PhotoFilter.options(scale: starScale)) { option in
+                ForEach(PhotoFilter.options(scale: starScale).filter { $0 != .discarded }) { option in
                     Button {
                         store.filter = option
                     } label: {
@@ -298,9 +306,19 @@ struct ViewerScreen: View {
                     .accessibilityIdentifier("filter.\(option.id)")
                 }
             }
+            Section {
+                Button { sheet = .pile } label: {
+                    Label("丢弃篮  \(store.pileCount) 张", systemImage: "trash")
+                }
+                .accessibilityIdentifier("menu.pile")
+            }
         } label: {
             HStack(spacing: 6) {
-                if store.filter != .all {
+                if inDiscardPile {
+                    Image(systemName: "trash").font(.system(size: 13, weight: .semibold))
+                    Text("丢弃篮")
+                    Text("·").opacity(0.5)
+                } else if store.filter != .all {
                     Image(systemName: store.filter.symbol).font(.system(size: 12, weight: .semibold))
                     Text(store.filter.title)
                     Text("·").opacity(0.5)
@@ -308,6 +326,8 @@ struct ViewerScreen: View {
                 Text(positionText).monospacedDigit()
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).opacity(0.7)
             }
+            .lineLimit(1)
+            .fixedSize()
             .font(.system(size: 15, weight: .medium))
             .foregroundStyle(inDiscardPile ? Color.red : Color.primary)
             .padding(.horizontal, 16)
@@ -371,19 +391,49 @@ struct ViewerScreen: View {
     private var toastView: some View {
         if let toast {
             HStack(spacing: 14) {
-                Text(toast.message).font(.system(size: 14, weight: .medium))
-                Button("撤销") {
+                Text(toastText(toast)).font(.system(size: 14, weight: .medium))
+                toastButton("撤销", id: "toast.undo") {
                     store.undoLastRating()
                     self.toast = nil
                 }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(GlancePalette.accent)
-                .accessibilityIdentifier("toast.undo")
+                if toast.new.isDiscarded {
+                    // From the photo just thrown away straight to the whole pile.
+                    toastButton("查看", id: "toast.pile") {
+                        self.toast = nil
+                        sheet = .pile
+                    }
+                }
             }
-            .padding(.horizontal, 18).padding(.vertical, 11)
+            .padding(.leading, 18).padding(.trailing, 8).padding(.vertical, 3)
+            // The whole toast takes the tap, so a near miss never falls through to the photo.
+            .contentShape(.capsule)
             .glassSurface(.capsule)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else if let notice {
+            Text(notice)
+                .font(.system(size: 14, weight: .medium))
+                .padding(.horizontal, 18).padding(.vertical, 11)
+                .glassSurface(.capsule)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .accessibilityIdentifier("toast.notice")
         }
+    }
+
+    private func toastButton(_ title: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(GlancePalette.accent)
+                .padding(.horizontal, 8)
+                .frame(minHeight: 38)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+    }
+
+    private func toastText(_ event: LibraryStore.RatingEvent) -> String {
+        event.new.isDiscarded ? "已丢弃 · 丢弃篮共 \(store.pileCount) 张" : event.message
     }
 
     private func showToast(_ event: LibraryStore.RatingEvent?) {
@@ -392,6 +442,15 @@ struct ViewerScreen: View {
         Task {
             try? await Task.sleep(nanoseconds: 3_500_000_000)
             if toast?.id == event.id { withAnimation { toast = nil } }
+        }
+    }
+
+    private func show(notice text: String) {
+        toast = nil
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { notice = text }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_600_000_000)
+            if notice == text { withAnimation { notice = nil } }
         }
     }
 
@@ -476,14 +535,13 @@ struct ViewerScreen: View {
         .animation(.spring(duration: 0.25, bounce: 0.3), value: discarded)
     }
 
-    /// In the discard pile the only decisions left: take this one back, or empty the pile.
+    /// Looking at one photo of the discard pile: take it back, go back to the whole pile, or delete it for good.
     private var discardPileDock: some View {
-        let count = store.count(.discarded)
-        return HStack(spacing: 2) {
+        HStack(spacing: 2) {
             Button { store.discard(advance: false) } label: {
                 Label("恢复", systemImage: "arrow.uturn.backward")
                     .font(.system(size: 16, weight: .semibold))
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                     .frame(height: 46)
                     .contentShape(.capsule)
             }
@@ -494,18 +552,35 @@ struct ViewerScreen: View {
 
             divider
 
-            Button { confirmCleanup = true } label: {
-                Label("清空 \(count) 张", systemImage: "trash")
+            Button { sheet = .pile } label: {
+                Label("丢弃篮", systemImage: "square.grid.2x2")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.red)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                     .frame(height: 46)
                     .contentShape(.capsule)
             }
             .buttonStyle(.plain)
-            .disabled(count == 0)
-            .accessibilityLabel("清空已丢弃的 \(count) 张照片")
-            .accessibilityIdentifier("dock.empty")
+            .accessibilityLabel("查看整个丢弃篮")
+            .accessibilityIdentifier("dock.pile")
+
+            divider
+
+            Button {
+                guard let asset = store.currentAsset else { return }
+                // The system asks before anything is deleted.
+                Task { await store.delete([asset]) }
+            } label: {
+                Label("删除", systemImage: "trash")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.red)
+                    .padding(.horizontal, 16)
+                    .frame(height: 46)
+                    .contentShape(.capsule)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.currentID == nil)
+            .accessibilityLabel("删除这张照片")
+            .accessibilityIdentifier("dock.delete")
         }
     }
 

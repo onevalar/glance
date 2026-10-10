@@ -43,6 +43,8 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         didSet { if filter != oldValue { rebuild(preferIndex: currentIndex) } }
     }
     @Published private(set) var totalCount = 0
+    /// Discarded photos in the whole library (the discard pile does not depend on the album being viewed).
+    @Published private(set) var pileCount = 0
     @Published private(set) var albums: [AlbumChoice] = []
     @Published private(set) var selectedAlbumID = AlbumChoice.allPhotosID
 
@@ -62,6 +64,37 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
 
     var discardedAssets: [PHAsset] {
         allAssets.filter { status(of: $0) == .discard }
+    }
+
+    /// Every discarded photo in the library, newest first.
+    func pileAssets() -> [PHAsset] {
+        let ids = pileIDs()
+        guard !ids.isEmpty else { return [] }
+        let result = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: imageOptions())
+        return result.objects(at: IndexSet(integersIn: 0..<result.count))
+    }
+
+    private func pileIDs() -> [String] {
+        metadata.metadataCache.compactMap { $0.value.isDiscarded ? $0.key : nil }
+    }
+
+    /// Takes photos back out of the discard pile.
+    func restore(_ ids: [String]) {
+        guard !ids.isEmpty else { return }
+        for id in ids { metadata.updateMetadata(forKey: id) { $0.setDiscarded(false) } }
+        refreshCounts()
+        if filter != .all { rebuild(preferIndex: currentIndex) }
+        objectWillChange.send()
+    }
+
+    /// Shows one photo of the pile in the viewer (switching to the whole library, where every pile photo is).
+    func openInPile(_ asset: PHAsset) {
+        if selectedAlbumID != AlbumChoice.allPhotosID {
+            selectedAlbumID = AlbumChoice.allPhotosID
+            reload()
+        }
+        filter = .discarded
+        if visible.contains(where: { $0.localIdentifier == asset.localIdentifier }) { currentID = asset.localIdentifier }
     }
 
     func status(of asset: PHAsset) -> ImageStatus {
@@ -226,7 +259,8 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
 
         /// Text for the toast.
         var message: String {
-            if new.isDiscarded { return "已放入丢弃" }
+            if new.isDiscarded { return "已丢弃" }
+            if previous.isDiscarded { return "已恢复" }
             if new.rating > 0 { return "已评 \(new.rating) 星" }
             return "已取消评分"
         }
@@ -308,11 +342,18 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         result[PhotoFilter.discarded.id] = discarded
         for n in 1...5 { result[PhotoFilter.stars(n).id] = stars[n] }
         counts = result
+        let ids = pileIDs()
+        pileCount = ids.isEmpty ? 0 : PHAsset.fetchAssets(withLocalIdentifiers: ids, options: imageOptions()).count
     }
 
     func asset(withID id: String) -> PHAsset? { assetsByID[id] }
 
     // MARK: - Deleting
+
+    nonisolated private static func deletion(of assets: NSArray) -> @Sendable () -> Void {
+        nonisolated(unsafe) let list = assets
+        return { PHAssetChangeRequest.deleteAssets(list) }
+    }
 
     /// Moves photos to "Recently Deleted". The system shows its own confirmation.
     @discardableResult
@@ -320,10 +361,10 @@ final class LibraryStore: NSObject, ObservableObject, PHPhotoLibraryChangeObserv
         guard !assets.isEmpty else { return true }
         let ids = assets.map(\.localIdentifier)
         do {
-            try await PHPhotoLibrary.shared().performChanges {
-                PHAssetChangeRequest.deleteAssets(assets as NSArray)
-            }
+            // PhotoKit runs the change block on its own queue, so it must not belong to the main actor.
+            try await PHPhotoLibrary.shared().performChanges(Self.deletion(of: assets as NSArray))
             for id in ids { metadata.removeMetadata(forKey: id) }
+            refreshCounts()
             logger.info("Deleted \(ids.count) photos")
             return true
         } catch {

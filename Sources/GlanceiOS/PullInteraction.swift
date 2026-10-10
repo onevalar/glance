@@ -422,6 +422,8 @@ final class PullStageView: UIView {
     var starCount = 5 { didSet { starRow.count = starCount } }
     /// Window y of the star row's centre (the top bar's centre), 0 = default.
     var starRowWindowY: CGFloat = 0 { didSet { setNeedsLayout() } }
+    /// Off in the discard pile: a pull down only gives a little and springs back, no bin.
+    var discardEnabled = true
 
     var onPhase: ((DragPhaseModel.Phase) -> Void)?
     var onCommit: ((PullOutcome) -> Void)?
@@ -584,7 +586,7 @@ final class PullStageView: UIView {
         let newMode: Mode? = dy > 0 ? .down : (dy < 0 ? .up : mode)
         if newMode != mode {
             mode = newMode
-            onPhase?(newMode == .down ? .trashing : .rating)
+            onPhase?(newMode == .down ? (discardEnabled ? .trashing : .idle) : .rating)
         }
 
         // The photo leans the way it is moved, like a card held at one corner.
@@ -593,6 +595,10 @@ final class PullStageView: UIView {
 
         let width = max(originFrame.width, 1)
         switch mode {
+        case .down? where !discardEnabled:
+            scale = 1
+            flyer.setLift(0)
+            starRow.alpha = 0
         case .down?:
             // Smaller the closer it gets to the opening, where it is just small enough to go in.
             let opening = binOpening
@@ -635,6 +641,11 @@ final class PullStageView: UIView {
         }
 
         var center = CGPoint(x: finger.x - grip.x * scale, y: finger.y - grip.y * scale)
+        if mode == .down, !discardEnabled {
+            // Nowhere to go: it only gives a little under the finger.
+            center = CGPoint(x: originFrame.midX + dx * 0.1, y: originFrame.midY + dy * 0.16)
+            tilt = 0
+        }
         if mode == .down, binRise > 0.5 {
             // The bin is solid: the photo can rest on the opening but not be pushed through it,
             // and near it it is drawn gently towards the middle.
@@ -689,7 +700,7 @@ final class PullStageView: UIView {
         isBusy = true
         let dy = finger.y - touchStart.y
         switch mode {
-        case .down? where !cancelled && (dy >= Self.discardDistance || (velocity.y > 900 && dy > 60)):
+        case .down? where discardEnabled && !cancelled && (dy >= Self.discardDistance || (velocity.y > 900 && dy > 60)):
             dropIntoBin(velocity: velocity)
         case .up? where !cancelled:
             let span = max(touchStart.y - rowCenterY, 160)

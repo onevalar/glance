@@ -14,6 +14,7 @@
 		07D600947B4FB8BA1BED621B /* PullInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99A5A1179131AB53044A7F27 /* PullInteraction.swift */; };
 		1B108BC02E10D989AFEEDA39 /* ImageInfoPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC9A3A3A4853E3C2721F613 /* ImageInfoPanel.swift */; };
 		21439D4265B9AF56E41E0D8A /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6136D7398BDC5BA16D4B9257 /* AppLogger.swift */; };
+		23E3C764C12D55945AA9436A /* DiscardPileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC4746D559112672EFC09F7 /* DiscardPileView.swift */; };
 		2D31B5CBA4EA88AE060A6E52 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA249A0296B5CB046DE115B1 /* SettingsWindow.swift */; };
 		348B3E8B71B05E4A9E510590 /* ThumbnailSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C89555C34FAD0446F073046 /* ThumbnailSidebar.swift */; };
 		34DF0FA369FCADB0B140618D /* GlanceiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */; };
@@ -93,6 +94,7 @@
 		1E453F316CEF7E7BDB4E55A4 /* GlanceAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceAppearance.swift; sourceTree = "<group>"; };
 		1F29D2DAE15DE431D246BA7F /* ImageMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMetadata.swift; sourceTree = "<group>"; };
 		2C841AE4CD2C2327AA89DC78 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
+		2DC4746D559112672EFC09F7 /* DiscardPileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscardPileView.swift; sourceTree = "<group>"; };
 		2F048264EA1BA039D935F7F2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		33E86E25856F0EE604A04857 /* ThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailCache.swift; sourceTree = "<group>"; };
 		34C6967F1FAD615791FC4501 /* GestureGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureGuide.swift; sourceTree = "<group>"; };
@@ -228,6 +230,7 @@
 			children = (
 				2F048264EA1BA039D935F7F2 /* Assets.xcassets */,
 				C325A540120FB3D78765D622 /* CompareView.swift */,
+				2DC4746D559112672EFC09F7 /* DiscardPileView.swift */,
 				34C6967F1FAD615791FC4501 /* GestureGuide.swift */,
 				A0F5CF7F660A45823B372C73 /* GlanceGlass.swift */,
 				ADA60E190B2DB704C87393AD /* GlanceiOSApp.swift */,
@@ -536,6 +539,7 @@
 			files = (
 				21439D4265B9AF56E41E0D8A /* AppLogger.swift in Sources */,
 				CBEB9A79190BD84469DE1CEC /* CompareView.swift in Sources */,
+				23E3C764C12D55945AA9436A /* DiscardPileView.swift in Sources */,
 				AD9A914E01451D39348A909E /* GestureGuide.swift in Sources */,
 				A063EF13E00171E82E09A8B7 /* GlanceAppearance.swift in Sources */,
 				3B60D4D7EF2B51FEAB44DB92 /* GlanceGlass.swift in Sources */,

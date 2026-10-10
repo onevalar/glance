@@ -144,12 +144,16 @@ struct ComparePickerView: View {
     }
 }
 
-private struct GridCell: View {
+struct GridCell: View {
     let asset: PHAsset
     let meta: ImageMetadata
     let isCurrent: Bool
     let selectionIndex: Int?
     let selecting: Bool
+    /// Tick-box selection (the discard pile): nil = no box, otherwise whether it is ticked.
+    var checked: Bool? = nil
+    /// The rating / discard badge (pointless inside the discard pile, where every photo is discarded).
+    var showsBadge = true
 
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
@@ -166,7 +170,9 @@ private struct GridCell: View {
             }
             .clipped()
             .overlay(alignment: .topTrailing) {
-                if meta.isDiscarded {
+                if !showsBadge {
+                    EmptyView()
+                } else if meta.isDiscarded {
                     Image(systemName: "trash.circle.fill").foregroundStyle(.white, .red).font(.system(size: 22)).padding(4)
                 } else if meta.rating > 0 {
                     Label("\(meta.rating)", systemImage: "star.fill")
@@ -197,6 +203,18 @@ private struct GridCell: View {
                     }
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                if let checked {
+                    Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(checked ? Color.white : Color.white.opacity(0.9), checked ? GlancePalette.accent : Color.black.opacity(0.25))
+                        .shadow(color: .black.opacity(0.3), radius: 2)
+                        .padding(6)
+                }
+            }
+            .overlay {
+                if checked == true { Rectangle().strokeBorder(GlancePalette.accent, lineWidth: 3) }
+            }
             .contentShape(.rect)
             .task(id: asset.localIdentifier) {
                 image = await PhotoImageLoader.image(
@@ -207,6 +225,6 @@ private struct GridCell: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("照片，\(meta.isDiscarded ? "已丢弃" : meta.rating > 0 ? "\(meta.rating) 星" : "未评分")")
-            .accessibilityAddTraits(selectionIndex != nil ? .isSelected : [])
+            .accessibilityAddTraits(selectionIndex != nil || checked == true ? .isSelected : [])
     }
 }

@@ -23,6 +23,8 @@ struct PhotoPager: UIViewControllerRepresentable {
     var onSingleTap: () -> Void
     var onZoomChange: (Bool) -> Void
     var onCommit: (PullOutcome) -> Void
+    /// Off in the discard pile: pulling down there has nowhere to go.
+    var discardEnabled = true
 
     func makeUIViewController(context: Context) -> PhotoPagerController {
         PhotoPagerController()
@@ -34,7 +36,7 @@ struct PhotoPager: UIViewControllerRepresentable {
         controller.onCommit = onCommit
         controller.onZoomChange = onZoomChange
         controller.phase = phase
-        controller.configureStage(starCount: starCount, starRowY: starRowY)
+        controller.configureStage(starCount: starCount, starRowY: starRowY, discardEnabled: discardEnabled)
         controller.setFitInsets(fitInsets)
         controller.update(assets: assets, currentID: currentID)
     }
@@ -97,7 +99,8 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
         }
     }
 
-    func configureStage(starCount: Int, starRowY: CGFloat) {
+    func configureStage(starCount: Int, starRowY: CGFloat, discardEnabled: Bool) {
+        stage.discardEnabled = discardEnabled
         if stage.starCount != starCount { stage.starCount = starCount }
         if stage.starRowWindowY != starRowY { stage.starRowWindowY = starRowY }
     }
