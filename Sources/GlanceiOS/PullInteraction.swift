@@ -24,145 +24,150 @@ final class DragPhaseModel: ObservableObject {
     @Published var phase: Phase = .idle
 }
 
-// MARK: - Trash bin artwork
+// MARK: - Trash bin (Liquid Glass)
 
-/// A classic wire-mesh office bin, drawn once. It is split in two images, the inside/back rim and the front wall,
-/// so a photo can sit between them and visibly fall *into* the opening.
-@MainActor
+/// Geometry of the bin, shared by its two layers.
 enum TrashBinArt {
-    nonisolated static let size = CGSize(width: 108, height: 126)
+    nonisolated static let size = CGSize(width: 136, height: 158)
     /// The opening (top rim) ellipse.
-    nonisolated static let rim = CGRect(x: 3, y: 6, width: 102, height: 28)
-    /// The floor ring.
-    nonisolated static let base = CGRect(x: 19, y: 106, width: 70, height: 14)
+    nonisolated static let rim = CGRect(x: 6, y: 14, width: 124, height: 34)
+    /// The bottom of the walls (well below the screen edge when the bin stands).
+    nonisolated static let floorY: CGFloat = 150
+    nonisolated static let floorInset: CGFloat = 20
+}
 
-    static let back: UIImage = render { context in
-        let cg = context.cgContext
-        // Contact shadow on the floor.
-        cg.saveGState()
-        cg.setShadow(offset: .zero, blur: 8, color: UIColor.black.withAlphaComponent(0.45).cgColor)
-        cg.setFillColor(UIColor.black.withAlphaComponent(0.22).cgColor)
-        cg.fillEllipse(in: base.insetBy(dx: -6, dy: 0).offsetBy(dx: 0, dy: 3))
-        cg.restoreGState()
+/// What the bin shows: how far the lid is open, and whether letting go now drops the photo in.
+@MainActor
+final class GlassBinState: ObservableObject {
+    @Published var lid: CGFloat = 0
+    @Published var ready = false
+}
 
-        // The inside: dark, a little lighter towards the front lip.
-        cg.saveGState()
-        UIBezierPath(ovalIn: rim).addClip()
-        let inside = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                colors: [UIColor(white: 0.08, alpha: 1).cgColor, UIColor(white: 0.30, alpha: 1).cgColor] as CFArray,
-                                locations: [0, 1])!
-        cg.drawLinearGradient(inside, start: CGPoint(x: 0, y: rim.minY), end: CGPoint(x: 0, y: rim.maxY), options: [])
-        // The back wall's mesh, seen through the opening.
-        cg.setStrokeColor(UIColor.white.withAlphaComponent(0.10).cgColor)
-        cg.setLineWidth(0.8)
-        var x = rim.minX - rim.height
-        while x < rim.maxX + rim.height {
-            cg.move(to: CGPoint(x: x, y: rim.minY)); cg.addLine(to: CGPoint(x: x + rim.height, y: rim.maxY))
-            cg.move(to: CGPoint(x: x + rim.height, y: rim.minY)); cg.addLine(to: CGPoint(x: x, y: rim.maxY))
-            x += 8
-        }
-        cg.strokePath()
-        cg.restoreGState()
-
-        // Back half of the rim.
-        let backRim = halfEllipse(rim, front: false)
-        UIColor(white: 0.62, alpha: 1).setStroke()
-        backRim.lineWidth = 3.4
-        backRim.stroke()
-    }
-
-    static let front: UIImage = render { context in
-        let cg = context.cgContext
-        // Walls: rim (left) → floor (left) → front of the floor ring → floor (right) → rim (right) → front of the rim.
-        let body = UIBezierPath()
-        body.move(to: CGPoint(x: rim.minX, y: rim.midY))
-        body.addLine(to: CGPoint(x: base.minX, y: base.midY))
-        addArc(body, base, from: .pi, to: 0)
-        body.addLine(to: CGPoint(x: rim.maxX, y: rim.midY))
-        addArc(body, rim, from: 0, to: .pi)
-        body.close()
-
-        cg.saveGState()
-        body.addClip()
-        // Brushed metal, darker towards the sides so it reads as a cylinder.
-        let metal = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
-            UIColor(white: 0.46, alpha: 0.96).cgColor,
-            UIColor(white: 0.86, alpha: 0.93).cgColor,
-            UIColor(white: 0.97, alpha: 0.92).cgColor,
-            UIColor(white: 0.74, alpha: 0.93).cgColor,
-            UIColor(white: 0.42, alpha: 0.96).cgColor,
-        ] as CFArray, locations: [0, 0.22, 0.42, 0.72, 1])!
-        cg.drawLinearGradient(metal, start: CGPoint(x: 0, y: 0), end: CGPoint(x: size.width, y: 0), options: [])
-        // Wire mesh: dark wires with a fine highlight beside each, so the holes read as holes.
-        let step: CGFloat = 9
-        let reach = size.height
-        func mesh(offset: CGFloat) -> CGPath {
-            let path = CGMutablePath()
-            var x = -reach
-            while x < size.width + reach {
-                path.move(to: CGPoint(x: x + offset, y: rim.midY)); path.addLine(to: CGPoint(x: x + offset + reach * 0.62, y: size.height))
-                path.move(to: CGPoint(x: x + offset + reach * 0.62, y: rim.midY)); path.addLine(to: CGPoint(x: x + offset, y: size.height))
-                x += step
-            }
-            return path
-        }
-        cg.addPath(mesh(offset: 0.9))
-        cg.setStrokeColor(UIColor.white.withAlphaComponent(0.35).cgColor)
-        cg.setLineWidth(0.7)
-        cg.strokePath()
-        cg.addPath(mesh(offset: 0))
-        cg.setStrokeColor(UIColor.black.withAlphaComponent(0.34).cgColor)
-        cg.setLineWidth(0.9)
-        cg.strokePath()
-        // A soft vertical sheen.
-        let sheen = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                               colors: [UIColor.white.withAlphaComponent(0).cgColor,
-                                        UIColor.white.withAlphaComponent(0.28).cgColor,
-                                        UIColor.white.withAlphaComponent(0).cgColor] as CFArray,
-                               locations: [0, 0.5, 1])!
-        cg.drawLinearGradient(sheen, start: CGPoint(x: size.width * 0.26, y: 0), end: CGPoint(x: size.width * 0.50, y: 0), options: [])
-        cg.restoreGState()
-
-        // Outline, floor ring and the thick rolled front rim.
-        UIColor.black.withAlphaComponent(0.28).setStroke()
-        body.lineWidth = 1
-        body.stroke()
-
-        let floorRing = halfEllipse(base, front: true)
-        floorRing.lineWidth = 3.2
-        UIColor(white: 0.55, alpha: 1).setStroke()
-        floorRing.stroke()
-
-        let frontRim = halfEllipse(rim, front: true)
-        frontRim.lineCapStyle = .round
-        frontRim.lineWidth = 4.6
-        UIColor(white: 0.70, alpha: 1).setStroke()
-        frontRim.stroke()
-        frontRim.lineWidth = 1.6
-        UIColor(white: 0.98, alpha: 1).setStroke()
-        frontRim.apply(CGAffineTransform(translationX: 0, y: -0.9))
-        frontRim.stroke()
-    }
-
-    /// Half of an ellipse: the front (lower) or back (upper) arc, drawn left to right.
-    private static func halfEllipse(_ rect: CGRect, front: Bool) -> UIBezierPath {
-        let path = UIBezierPath()
-        path.move(to: CGPoint(x: rect.minX, y: rect.midY))
-        addArc(path, rect, from: .pi, to: front ? 0 : 2 * .pi)
+/// The walls: from the rim's widest point down to the floor, closed along the front of the rim.
+private struct BinWallShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let rim = TrashBinArt.rim
+        let inset = TrashBinArt.floorInset
+        var path = Path()
+        path.move(to: CGPoint(x: rim.minX, y: rim.midY))
+        path.addLine(to: CGPoint(x: rim.minX + inset, y: TrashBinArt.floorY - 14))
+        path.addQuadCurve(to: CGPoint(x: rim.minX + inset + 14, y: TrashBinArt.floorY),
+                          control: CGPoint(x: rim.minX + inset + 1, y: TrashBinArt.floorY))
+        path.addLine(to: CGPoint(x: rim.maxX - inset - 14, y: TrashBinArt.floorY))
+        path.addQuadCurve(to: CGPoint(x: rim.maxX - inset, y: TrashBinArt.floorY - 14),
+                          control: CGPoint(x: rim.maxX - inset - 1, y: TrashBinArt.floorY))
+        path.addLine(to: CGPoint(x: rim.maxX, y: rim.midY))
+        // Front half of the rim, right to left.
+        path.addArc(center: CGPoint(x: rim.midX, y: rim.midY), radius: rim.width / 2,
+                    startAngle: .zero, endAngle: .degrees(180), clockwise: false,
+                    transform: CGAffineTransform(translationX: rim.midX, y: rim.midY)
+                        .scaledBy(x: 1, y: rim.height / rim.width)
+                        .translatedBy(x: -rim.midX, y: -rim.midY))
+        path.closeSubpath()
         return path
     }
+}
 
-    /// Continues `path` along an ellipse (angles in screen coordinates: π/2 is the bottom).
-    private static func addArc(_ path: UIBezierPath, _ rect: CGRect, from start: CGFloat, to end: CGFloat) {
-        let steps = 40
-        for step in 0...steps {
-            let angle = start + (end - start) * CGFloat(step) / CGFloat(steps)
-            path.addLine(to: CGPoint(x: rect.midX + cos(angle) * rect.width / 2, y: rect.midY + sin(angle) * rect.height / 2))
+/// The front edge of the rim (the lip you look over).
+private struct RimLipShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let rim = TrashBinArt.rim
+        var path = Path()
+        path.addArc(center: CGPoint(x: rim.midX, y: rim.midY), radius: rim.width / 2,
+                    startAngle: .zero, endAngle: .degrees(180), clockwise: false,
+                    transform: CGAffineTransform(translationX: rim.midX, y: rim.midY)
+                        .scaledBy(x: 1, y: rim.height / rim.width)
+                        .translatedBy(x: -rim.midX, y: -rim.midY))
+        return path
+    }
+}
+
+/// Soft vertical light lines that make the glass read as a rounded bin.
+private struct BinRibs: Shape {
+    func path(in rect: CGRect) -> Path {
+        let rim = TrashBinArt.rim
+        var path = Path()
+        for fraction in [0.32, 0.5, 0.68] as [CGFloat] {
+            let top = rim.minX + rim.width * fraction
+            let bottom = rim.midX + (top - rim.midX) * 0.72
+            path.move(to: CGPoint(x: top, y: rim.maxY + 10))
+            path.addLine(to: CGPoint(x: bottom, y: TrashBinArt.floorY - 18))
         }
+        return path
+    }
+}
+
+/// The lid (a long capsule with a small handle), already rotated about its hinge at the left end of the rim.
+/// Drawn as one shape so the glass follows it exactly while it swings.
+private struct LidShape: Shape {
+    var open: CGFloat
+
+    var animatableData: CGFloat {
+        get { open }
+        set { open = newValue }
     }
 
-    private static func render(_ draw: (UIGraphicsImageRendererContext) -> Void) -> UIImage {
-        UIGraphicsImageRenderer(size: size).image(actions: draw)
+    func path(in rect: CGRect) -> Path {
+        let rim = TrashBinArt.rim
+        let hinge = CGPoint(x: rim.minX - 1, y: rim.minY + 1)
+        let width = rim.width + 4
+        var lid = Path()
+        lid.addRoundedRect(in: CGRect(x: hinge.x, y: hinge.y - 12, width: width, height: 12),
+                           cornerSize: CGSize(width: 6, height: 6))
+        lid.addRoundedRect(in: CGRect(x: hinge.x + width / 2 - 17, y: hinge.y - 19, width: 34, height: 8),
+                           cornerSize: CGSize(width: 4, height: 4))
+        // Fully open it stands up beside the opening, out of the photo's way.
+        let turn = CGAffineTransform(translationX: hinge.x, y: hinge.y)
+            .rotated(by: -open * .pi * 0.58)
+            .translatedBy(x: -hinge.x, y: -hinge.y)
+        return lid.applying(turn)
+    }
+}
+
+/// Behind the photo: the inside of the bin seen through its opening.
+struct GlassBinBack: View {
+    @ObservedObject var state: GlassBinState
+
+    var body: some View {
+        let rim = TrashBinArt.rim
+        ZStack(alignment: .topLeading) {
+            Color.clear
+            Ellipse()
+                .fill(Color.black.opacity(0.18))
+                .overlay(Ellipse().fill(Color.red.opacity(state.ready ? 0.22 : 0)))
+                .glassSurface(Ellipse(), tint: Color.black.opacity(0.18))
+                .overlay(Ellipse().strokeBorder(Color.white.opacity(0.45), lineWidth: 1))
+                .frame(width: rim.width, height: rim.height)
+                .offset(x: rim.minX, y: rim.minY)
+        }
+        .frame(width: TrashBinArt.size.width, height: TrashBinArt.size.height, alignment: .topLeading)
+        .animation(.easeOut(duration: 0.2), value: state.ready)
+    }
+}
+
+/// In front of the photo: the glass walls, the lip of the rim and the lid. A photo that falls in is seen through
+/// the glass.
+struct GlassBinFront: View {
+    @ObservedObject var state: GlassBinState
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+                .glassSurface(BinWallShape(), tint: state.ready ? Color.red.opacity(0.14) : Color.white.opacity(0.04))
+            BinRibs()
+                .stroke(Color.white.opacity(0.30), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+            RimLipShape()
+                .stroke(LinearGradient(colors: [Color.white.opacity(0.95), Color.white.opacity(0.35)],
+                                       startPoint: .leading, endPoint: .trailing),
+                        style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+            Color.clear
+                .glassSurface(LidShape(open: state.lid), tint: state.ready ? Color.red.opacity(0.14) : nil)
+            LidShape(open: state.lid)
+                .stroke(Color.white.opacity(0.5), lineWidth: 0.8)
+        }
+        .frame(width: TrashBinArt.size.width, height: TrashBinArt.size.height, alignment: .topLeading)
+        .animation(.spring(duration: 0.38, bounce: 0.4), value: state.lid)
+        .animation(.easeOut(duration: 0.2), value: state.ready)
     }
 }
 
@@ -426,9 +431,11 @@ final class PullStageView: UIView {
     private(set) var isBusy = false
     private var isTracking = false
 
-    private let binBack = UIImageView(image: TrashBinArt.back)
-    private let binFront = UIImageView(image: TrashBinArt.front)
-    private let binGlow = CAShapeLayer()
+    private let binState = GlassBinState()
+    private lazy var backHost = Self.host(GlassBinBack(state: binState))
+    private lazy var frontHost = Self.host(GlassBinFront(state: binState))
+    private var binBack: UIView { backHost.view }
+    private var binFront: UIView { frontHost.view }
     private let flyerLayer = UIView()
     private let starRow = StarRowView()
     private var flyer: PhotoFlyer?
@@ -455,15 +462,6 @@ final class PullStageView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = false
-        binGlow.path = UIBezierPath(ovalIn: TrashBinArt.rim.insetBy(dx: 6, dy: 3)).cgPath
-        binGlow.fillColor = UIColor.systemRed.withAlphaComponent(0.38).cgColor
-        binGlow.shadowColor = UIColor.systemRed.cgColor
-        binGlow.shadowRadius = 10
-        binGlow.shadowOpacity = 0.7
-        binGlow.shadowOffset = .zero
-        binGlow.opacity = 0
-        binBack.layer.addSublayer(binGlow)
-
         // The photo sits between the inside of the bin and its front wall (so it can fall in), and above the stars.
         for view in [binBack, starRow, flyerLayer, binFront] as [UIView] { addSubview(view) }
         flyerLayer.isUserInteractionEnabled = false
@@ -474,6 +472,15 @@ final class PullStageView: UIView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// A SwiftUI layer (real Liquid Glass) used as a plain view on the stage.
+    private static func host<V: View>(_ view: V) -> UIHostingController<V> {
+        let host = UIHostingController(rootView: view)
+        host.view.backgroundColor = .clear
+        host.view.isUserInteractionEnabled = false
+        host.safeAreaRegions = []
+        return host
+    }
+
     private var safeInsets: UIEdgeInsets { window?.safeAreaInsets ?? safeAreaInsets }
 
     private var rowCenterY: CGFloat {
@@ -481,9 +488,13 @@ final class PullStageView: UIView {
         return safeInsets.top + 30
     }
 
-    /// Where the bin stands when it has fully risen (its bottom just above the home indicator).
+    /// How much of the bin shows above the bottom edge once it has risen: the opening and the upper walls.
+    private static let binVisible: CGFloat = 0.62
+
+    /// Where the bin stands when it has fully risen: half sunk below the bottom edge of the screen.
     private var binRestCenter: CGPoint {
-        CGPoint(x: bounds.midX, y: bounds.maxY - safeInsets.bottom - 8 - TrashBinArt.size.height / 2)
+        let height = TrashBinArt.size.height
+        return CGPoint(x: bounds.midX, y: bounds.maxY - height * Self.binVisible + height / 2)
     }
 
     /// Centre of the opening of the bin at rest, in stage coordinates.
@@ -505,7 +516,7 @@ final class PullStageView: UIView {
 
     private func placeBin(rise: CGFloat, extra: CGAffineTransform = .identity) {
         let rest = binRestCenter
-        let travel = TrashBinArt.size.height + safeInsets.bottom + 40
+        let travel = TrashBinArt.size.height * Self.binVisible + 30
         let eased = 1 - pow(1 - rise, 2)
         for view in [binBack, binFront] {
             view.bounds = CGRect(origin: .zero, size: TrashBinArt.size)
@@ -519,12 +530,8 @@ final class PullStageView: UIView {
         guard ready != binReady else { return }
         binReady = ready
         if ready { lightImpact.impactOccurred() }
-        let glow = CABasicAnimation(keyPath: "opacity")
-        glow.fromValue = binGlow.presentation()?.opacity ?? binGlow.opacity
-        glow.toValue = ready ? 1 : 0
-        glow.duration = 0.2
-        binGlow.opacity = ready ? 1 : 0
-        binGlow.add(glow, forKey: "glow")
+        binState.ready = ready
+        setLid(ready ? 1 : (binRise > 0.6 ? 0.28 : 0))
         // Anchored at the floor: it grows towards the photo a little, like it is ready to catch it.
         let lift = ready ? Self.bottomAnchored(sx: 1.1, sy: 1.1) : .identity
         UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.55, initialSpringVelocity: 0,
@@ -532,6 +539,10 @@ final class PullStageView: UIView {
             self.binBack.transform = lift
             self.binFront.transform = lift
         }
+    }
+
+    private func setLid(_ value: CGFloat) {
+        if binState.lid != value { binState.lid = value }
     }
 
     private static func bottomAnchored(sx: CGFloat, sy: CGFloat) -> CGAffineTransform {
@@ -552,7 +563,8 @@ final class PullStageView: UIView {
         scale = 1
         binRise = 0
         binReady = false
-        binGlow.opacity = 0
+        binState.ready = false
+        setLid(0)
         restoreSource = restore
 
         let flyer = PhotoFlyer(frame: frame)
@@ -593,6 +605,7 @@ final class PullStageView: UIView {
             binRise = (dy / 120).clamped(0, 1)
             UIView.performWithoutAnimation { placeBin(rise: binRise, extra: binBack.transform) }
             setBinReady(dy >= Self.discardDistance)
+            if !binReady { setLid(binRise > 0.6 ? 0.28 : 0) }
             starRow.alpha = 0
         case .up?:
             let span = max(touchStart.y - rowCenterY, 160)
@@ -643,13 +656,31 @@ final class PullStageView: UIView {
     }
 
     /// The star the photo would land in: the one under the finger, or (while flicking up) the one on its path.
+    /// The star the photo goes to: the one under the finger on the row, or — when it is being thrown upwards —
+    /// the one in the direction of the throw: up-left is 1 star, straight up the middle, up-right the most.
     private func aimedStar(finger: CGPoint, velocity: CGPoint, progress: CGFloat, releasing: Bool = false) -> Int? {
         if abs(finger.y - rowCenterY) <= Self.starBand { return starRow.star(atX: finger.x, in: self) }
-        let fastEnough = releasing ? velocity.y < -650 : velocity.y < -900
-        guard progress > 0.25, fastEnough, finger.y > rowCenterY else { return nil }
-        let time = (rowCenterY - finger.y) / velocity.y
-        let x = finger.x + velocity.x * time
-        return starRow.star(atX: x, in: self)
+        let lift = touchStart.y - finger.y
+        guard lift > Self.throwDistance, -velocity.y > Self.throwSpeed else { return nil }
+        return star(towards: CGPoint(x: finger.x - touchStart.x, y: finger.y - touchStart.y), velocity: velocity)
+    }
+
+    private static let throwDistance: CGFloat = 40
+    private static let throwSpeed: CGFloat = 420
+    /// Throws further than this from straight up (either side) count as the first / last star.
+    private static let throwSpread: CGFloat = .pi / 4
+
+    /// Direction of a throw (the stroke and the final flick together) mapped onto the stars.
+    private func star(towards stroke: CGPoint, velocity: CGPoint) -> Int {
+        func unit(_ p: CGPoint) -> CGPoint {
+            let length = hypot(p.x, p.y)
+            return length > 0.001 ? CGPoint(x: p.x / length, y: p.y / length) : CGPoint(x: 0, y: -1)
+        }
+        let a = unit(stroke), b = unit(velocity)
+        let direction = CGPoint(x: a.x * 0.4 + b.x * 0.6, y: a.y * 0.4 + b.y * 0.6)
+        let angle = atan2(direction.x, -direction.y)               // 0 = straight up, > 0 = to the right
+        let position = ((angle + Self.throwSpread) / (2 * Self.throwSpread)).clamped(0, 0.999)
+        return Int(position * CGFloat(starCount)) + 1
     }
 
     func end(finger: CGPoint, velocity: CGPoint, cancelled: Bool) {
@@ -727,7 +758,7 @@ final class PullStageView: UIView {
         toOpening.addCompletion { _ in
             // Falls in: the front wall of the bin covers it as it goes down.
             UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseIn]) {
-                flyer.center.y += 52
+                flyer.center.y += 64
                 flyer.transform = CGAffineTransform(rotationAngle: lean * 1.6).scaledBy(x: endScale * 0.82, y: endScale * 0.82)
             } completion: { _ in
                 flyer.alpha = 0
@@ -741,6 +772,7 @@ final class PullStageView: UIView {
     private func catchInBin() {
         thud.impactOccurred()
         setBinReady(false)
+        setLid(0)                      // the lid falls shut over it
         // The bin gives a little under the weight, then settles.
         UIView.animate(withDuration: 0.09, delay: 0, options: [.curveEaseOut]) {
             let squash = Self.bottomAnchored(sx: 1.08, sy: 0.9)
@@ -768,6 +800,10 @@ final class PullStageView: UIView {
         let start = flyer.center
         let end = starRow.center(ofStar: star, in: self)
         starRow.show(lit: star, target: star)
+        UIView.animate(withDuration: 0.16, delay: 0, options: [.beginFromCurrentState]) {
+            self.starRow.alpha = 1
+            self.starRow.transform = .identity
+        }
 
         // 1. The photo burns into light where it is.
         flyer.setGlow(1)
@@ -844,6 +880,8 @@ final class PullStageView: UIView {
     }
 
     private func finish() {
+        binState.ready = false
+        setLid(0)
         flyer?.removeFromSuperview()
         flyer = nil
         restoreSource = nil

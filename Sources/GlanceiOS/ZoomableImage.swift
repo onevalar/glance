@@ -44,10 +44,12 @@ final class VerticalPanGestureRecognizer: UIPanGestureRecognizer {
             // known: otherwise a slow drag can start the pan after a few points, before it is clear it is sideways.
             let dx = point.x - startPoint.x, dy = point.y - startPoint.y
             guard abs(dx) > 12 || abs(dy) > 12 else { return }
-            // Decide once: only a movement that is clearly vertical (within about 25° of straight up/down)
-            // starts a pull. Everything else belongs to paging and zooming, so a sideways swipe with a little
-            // vertical drift can never rate or discard by accident.
-            if abs(dy) < abs(dx) * 2.2 { state = .failed; return }
+            // Decide once. Upwards the photo may be thrown at the stars on either side, so anything within
+            // about 50° of straight up starts a pull; downwards (discarding) it must be clearly vertical, within
+            // about 25°. Flatter movements belong to paging, so a sideways swipe with some drift never rates or
+            // discards by accident.
+            let allowed: CGFloat = dy < 0 ? 0.84 : 2.2       // |dy| / |dx| at the edge of the cone
+            if abs(dy) < abs(dx) * allowed { state = .failed; return }
         }
         super.touchesMoved(touches, with: event)
     }
@@ -68,8 +70,13 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     var onZoomedIn: (() -> Void)?
 
     /// Space kept free around the photo when it is not zoomed (the bars), in this view's coordinates.
-    var fitInsets: UIEdgeInsets = .zero {
-        didSet { if oldValue != fitInsets { updateMinimumZoom(animated: window != nil) } }
+    private(set) var fitInsets: UIEdgeInsets = .zero
+
+    /// Animated only for a photo on screen; pages prepared off screen take the new room silently.
+    func setFitInsets(_ insets: UIEdgeInsets, animated: Bool) {
+        guard insets != fitInsets else { return }
+        fitInsets = insets
+        updateMinimumZoom(animated: animated && window != nil)
     }
 
     var ratingGesturesEnabled = true
@@ -81,8 +88,6 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
 
     private let pullPan = VerticalPanGestureRecognizer()
 
-    /// Opacity the photo returns to after an animation (dimmed while it is in the discard pile).
-    var restingAlpha: CGFloat = 1
     private var needsFit = true
     private var lastBoundsSize: CGSize = .zero
     private var didReportZoomedIn = false
@@ -292,12 +297,12 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate, UIGestureReco
     /// Brings the photo back after it was lifted: instantly (it was put back in place) or fading in.
     func showAgain(animated: Bool) {
         imageView.isHidden = false
-        guard animated else { imageView.alpha = restingAlpha; return }
+        guard animated else { imageView.alpha = 1; return }
         imageView.alpha = 0
         transform = CGAffineTransform(scaleX: 0.94, y: 0.94)
         UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0,
                        options: [.allowUserInteraction]) {
-            self.imageView.alpha = self.restingAlpha
+            self.imageView.alpha = 1
             self.transform = .identity
         }
     }

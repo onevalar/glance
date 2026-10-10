@@ -165,7 +165,6 @@ private struct GridCell: View {
                 }
             }
             .clipped()
-            .opacity(meta.isDiscarded ? 0.45 : 1)
             .overlay(alignment: .topTrailing) {
                 if meta.isDiscarded {
                     Image(systemName: "trash.circle.fill").foregroundStyle(.white, .red).font(.system(size: 22)).padding(4)

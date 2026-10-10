@@ -108,11 +108,46 @@ final class GestureTests: XCTestCase {
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
         Thread.sleep(forTimeInterval: 0.8)
         pager.swipeRight()
-        XCTAssertTrue(element("dock.restore").waitForExistence(timeout: 4), "the stars give way to a discarded status")
+        XCTAssertTrue(element("dock.status.discarded").waitForExistence(timeout: 4), "the stars give way to a discarded status")
         XCTAssertFalse(element("dock.star.1").exists)
         shot("10-discarded-dock")
-        element("dock.restore").tap()
+        element("dock.discard").tap()           // the trash button is now 恢复
         XCTAssertTrue(element("dock.star.1").waitForExistence(timeout: 3), "restoring brings the stars back")
+    }
+
+    // MARK: - Rating by throwing
+
+    /// A quick thumb flick from the lower middle, `degrees` from straight up (negative = to the left).
+    private func flick(degrees: Double) {
+        let start = at(0.5, 0.72)
+        let radians = degrees * .pi / 180
+        let end = start.withOffset(CGVector(dx: sin(radians) * 230, dy: -cos(radians) * 230))
+        // About the speed of a real flick of the thumb.
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: XCUIGestureVelocity(rawValue: 2400), thenHoldForDuration: 0)
+    }
+
+    private func assertStars(_ n: Int, _ message: String) {
+        XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), message)
+        Thread.sleep(forTimeInterval: 0.8)
+        pager.swipeRight()
+        let star = element("dock.star.\(n)")
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: star)
+        XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 4), .completed, message)
+    }
+
+    func testThrowUpRightGivesTheMostStars() throws {
+        flick(degrees: 38)
+        assertStars(5, "a throw up and to the right lands in the last star")
+    }
+
+    func testThrowStraightUpGivesTheMiddleStar() throws {
+        flick(degrees: 0)
+        assertStars(3, "a straight throw lands in the middle star")
+    }
+
+    func testThrowUpLeftGivesOneStar() throws {
+        flick(degrees: -38)
+        assertStars(1, "a throw up and to the left lands in the first star")
     }
 
     func testStarsRiseWhilePulling() throws {
@@ -159,6 +194,7 @@ final class GestureTests: XCTestCase {
     func testPullDownDiscardsAndUndoRestores() throws {
         drag((0.5, 0.35), (0.5, 0.82))
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3), "discard shows the undo toast")
+        Thread.sleep(forTimeInterval: 1.2)
         element("toast.undo").tap()
         XCTAssertFalse(element("dock.discard").isSelected, "undo takes the photo out of the discard pile")
     }
@@ -166,11 +202,16 @@ final class GestureTests: XCTestCase {
     func testPullDownMarksDiscardedNotDeleted() throws {
         drag((0.5, 0.35), (0.5, 0.82))
         XCTAssertTrue(element("toast.undo").waitForExistence(timeout: 3))
+        Thread.sleep(forTimeInterval: 1.2)      // the bars return once the bin has sunk
         element("top.scope").tap()
         element("filter.discarded").tap()
-        XCTAssertTrue(element("dock.discard").waitForExistence(timeout: 3))
-        XCTAssertTrue(element("dock.discard").isSelected, "the discard pile still holds the photo")
+        XCTAssertTrue(element("dock.restore").waitForExistence(timeout: 3), "the pile offers 恢复")
+        XCTAssertTrue(element("dock.empty").exists, "and a separate 清空")
+        XCTAssertFalse(element("dock.star.1").exists, "no rating inside the pile")
         shot("09-discard-pile")
+        element("dock.empty").tap()
+        XCTAssertTrue(app.buttons["删除这 1 张照片"].waitForExistence(timeout: 3), "emptying asks first")
+        shot("09b-empty-confirm")
     }
 
     func testTrashRisesWhilePulling() throws {
@@ -255,9 +296,11 @@ final class GestureTests: XCTestCase {
     func testEachActionAppearsOnce() throws {
         // The compare entry is in the dock only; the more-menu has no second copy.
         element("top.more").tap()
-        XCTAssertTrue(app.buttons["设置"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["操作说明"].waitForExistence(timeout: 2))
+        shot("15-more-menu")
         XCTAssertFalse(app.buttons["选择照片对比…"].exists, "no second compare entry in the menu")
-        XCTAssertFalse(element("top.counter").exists, "position lives inside the scope pill, not beside it")
+        XCTAssertFalse(app.buttons["设置"].exists, "no separate settings screen: everything is in this menu")
+        XCTAssertFalse(element("top.photos").exists, "the top-left control is the album menu, not a second photo picker")
     }
 
     func testTapHidesAndShowsTheBars() throws {
@@ -273,7 +316,9 @@ final class GestureTests: XCTestCase {
     // MARK: - Overview, comparison, settings, guide
 
     func testPhotosGrid() throws {
-        element("top.photos").tap()
+        element("top.album").tap()
+        shot("16-album-menu")
+        element("scope.grid").tap()
         sleep(1)
         shot("04a-grid")
         XCTAssertTrue(element("grid.close").waitForExistence(timeout: 3))
@@ -304,11 +349,13 @@ final class GestureTests: XCTestCase {
 
     func testSettingsStarScale() throws {
         element("top.more").tap()
-        element("menu.settings").tap()
-        XCTAssertTrue(element("settings.starScale").waitForExistence(timeout: 3))
-        app.segmentedControls.buttons["3 星"].tap()
+        let scale = app.buttons.matching(NSPredicate(format: "label BEGINSWITH '评分方式'")).firstMatch
+        XCTAssertTrue(scale.waitForExistence(timeout: 3))
+        scale.tap()
+        let three = app.buttons.matching(NSPredicate(format: "label == '3 星' AND NOT (identifier BEGINSWITH 'dock')")).firstMatch
+        XCTAssertTrue(three.waitForExistence(timeout: 3))
         shot("12-settings")
-        app.buttons["完成"].tap()
+        three.tap()
         XCTAssertTrue(element("dock.star.3").waitForExistence(timeout: 3))
         XCTAssertFalse(element("dock.star.4").exists, "three-star mode shows three stars")
         shot("12-three-stars")

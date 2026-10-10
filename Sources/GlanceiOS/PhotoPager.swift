@@ -23,7 +23,6 @@ struct PhotoPager: UIViewControllerRepresentable {
     var onSingleTap: () -> Void
     var onZoomChange: (Bool) -> Void
     var onCommit: (PullOutcome) -> Void
-    var isDiscarded: (String) -> Bool
 
     func makeUIViewController(context: Context) -> PhotoPagerController {
         PhotoPagerController()
@@ -35,11 +34,9 @@ struct PhotoPager: UIViewControllerRepresentable {
         controller.onCommit = onCommit
         controller.onZoomChange = onZoomChange
         controller.phase = phase
-        controller.isDiscarded = isDiscarded
         controller.configureStage(starCount: starCount, starRowY: starRowY)
         controller.setFitInsets(fitInsets)
         controller.update(assets: assets, currentID: currentID)
-        controller.refreshDiscardedDimming()
     }
 }
 
@@ -50,8 +47,6 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
     var onCommit: ((PullOutcome) -> Void)?
     var onZoomChange: ((Bool) -> Void)?
     var phase: DragPhaseModel?
-    /// Asks the store whether a photo is in the discard pile, so it can be dimmed in place.
-    var isDiscarded: ((String) -> Bool)?
 
     private var assets: [PHAsset] = []
     private var ids: [String] = []
@@ -110,7 +105,7 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
     func setFitInsets(_ insets: UIEdgeInsets) {
         guard insets != fitInsets else { return }
         fitInsets = insets
-        for case let cell as PhotoCell in collectionView.visibleCells { cell.zoomView.fitInsets = insets }
+        for case let cell as PhotoCell in collectionView.visibleCells { cell.zoomView.setFitInsets(insets, animated: true) }
     }
 
     override func viewDidLayoutSubviews() {
@@ -140,13 +135,6 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
         if listChanged || currentID != reportedID {
             // The selection changed from outside (rating advanced, grid tap, filter...): follow it.
             scroll(to: currentID, animated: !listChanged && reportedID != nil)
-        }
-    }
-
-    /// Dims photos in the discard pile (visible pages only, so this stays cheap).
-    func refreshDiscardedDimming() {
-        for case let cell as PhotoCell in collectionView.visibleCells {
-            cell.setDimmed(isDiscarded?(cell.currentAssetID) ?? false)
         }
     }
 
@@ -188,9 +176,8 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: PhotoCell.reuseID, for: indexPath) as! PhotoCell
-        cell.zoomView.fitInsets = fitInsets
+        cell.zoomView.setFitInsets(fitInsets, animated: false)
         cell.configure(asset: assets[indexPath.item], caching: caching)
-        cell.setDimmed(isDiscarded?(assets[indexPath.item].localIdentifier) ?? false)
         cell.onSingleTap = { [weak self] in self?.onSingleTap?() }
         cell.onZoomChange = { [weak self, weak cell] zoomed in
             guard let cell else { return }
@@ -201,6 +188,12 @@ final class PhotoPagerController: UIViewController, UICollectionViewDataSource, 
             self.handlePull(gesture, on: cell)
         }
         return cell
+    }
+
+    /// Pages are prepared ahead of time; by the time one appears the bars may have changed.
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell,
+                        forItemAt indexPath: IndexPath) {
+        (cell as? PhotoCell)?.zoomView.setFitInsets(fitInsets, animated: false)
     }
 
     // Warm the neighbours so the next photo is already on screen when the page settles.
@@ -316,11 +309,6 @@ final class PhotoCell: UICollectionViewCell {
         asset = nil
         assetID = ""
         loadedOriginal = false
-    }
-
-    func setDimmed(_ dimmed: Bool) {
-        zoomView.restingAlpha = dimmed ? 0.4 : 1
-        UIView.animate(withDuration: 0.2) { self.zoomView.imageView.alpha = self.zoomView.restingAlpha }
     }
 
     private func cancelRequests() {
